@@ -4,7 +4,6 @@
   "description": "A visualization end for models on functional magenetic resonance imaging (fMRI) modality",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "parcel build webpages/roi-viz/src/index.html --public-url ./",
     "deploy": "gh-pages -d dist"
   },
   "keywords": [],
