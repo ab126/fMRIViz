@@ -2,9 +2,9 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 //import roiFiles from "./roiFiles.js";
-import roiFiles from '../public/datasets/mni/roiFiles.js';
+//import {roiFiles} from '../public/datasets/mni/roiFiles.js';
 //import * as roiFiles from '../public/datasets/mni/roiFiles.js';
-
+import metaData from './assets/datasets/mni/metaData.js'
 
 /* ------------------------------------------------------------------
    BASIC THREE SETUP
@@ -154,41 +154,25 @@ function clearScene() {
   loadedObjects.length = 0;
 }
 
-// Load Functions
+// Load Functions //TODO: select from the path here
 async function loadDataset(datasetRoot) {
   // Clear scene
   clearScene();
 
   // Load metadata
-  /*
-  const metaURL2 = new URL(
-    //`${datasetRoot}/meta.json`,
-    '../public/datasets/mni/meta.json',
-    import.meta.url
-  );*/
-  const metaURL = '/datasets/mni/meta.json';
-
-  //console.log(await fetch(metaURL));
-  /*
-  const meta = await fetch(metaURL).then(r => {
-    console.log(r);
-    return r.json();
+  loadBrain(metaData.brainURL);
+  
+  metaData.roiURLs.forEach((roiPath, i) => {
+    loadROI(roiPath, i, metaData.roiURLs.length);
   });
-  */
 
-  loadBrain(`${datasetRoot}/${meta.brain}`);
-
-  //meta.rois.forEach((roiPath, i) => {
-  roiFiles.forEach((roiPath, i) => {
-
-    loadROI(`${datasetRoot}/${roiPath}`, i, meta.rois.length);
-  });
+  loadROILabels(metaData.roiLabelsURL);
 }
 
-function loadBrain(path) {
+function loadBrain(brainURL) {
   // --- Brain ---
   loader.load(
-    new URL(path, import.meta.url),
+    brainURL,
     geometry => {
       geometry.computeVertexNormals();
       const brain = new THREE.Mesh(geometry, brainMaterial);
@@ -200,9 +184,10 @@ function loadBrain(path) {
   );
 }
 
-function loadROI(path, index, total) {
+function loadROI(roiURL, index, total) {
   loader.load(
-    new URL(path, import.meta.url),
+    //new URL(path, import.meta.url),
+    roiURL,
     geometry => {
       geometry.computeVertexNormals();
       const roi = new THREE.Mesh(
@@ -212,7 +197,7 @@ function loadROI(path, index, total) {
       roi.material.color.copy(
         vedoRainbow((index - 1) / (total - 1))
       );
-      roi.name = `ROI_${String(i).padStart(2, '0')}`;
+      roi.name = `ROI_${String(index).padStart(2, '0')}`;
       //roi.renderOrder = 1;
 
       scene.add(roi);
@@ -221,7 +206,16 @@ function loadROI(path, index, total) {
   );
 }
 
-// TODO: Load Labels
+function loadROILabels(roiLabelsURL){
+  loader.load(roiLabelsURL, geometry => {
+    geometry.computeVertexNormals();
+
+    const labelsMesh = new THREE.Mesh(geometry, roiLabelsMaterial);
+    scene.add(labelsMesh);
+    loadedObjects.push(labelsMesh);
+    //labelsMesh.renderOrder = 0;
+  });
+}
 
 // Vedo-like Rainbow colormap
 function vedoRainbow(t) {
