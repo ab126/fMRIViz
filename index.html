@@ -1,19 +1,27 @@
-<!DOCTYPE html><html lang=en><script type=importmap>{"imports":{"2VMUz":"./roi_06.b3819c14.ply","3AeF6":"./roi_07.7f2bc301.ply","40v2W":"./roi_08.f93a9bdf.ply","4fYU8":"./roi_01.deeeb680.ply","4hHFf":"./roi_17.b9590694.ply","56gHv":"./roi_04.66e2c0cb.ply","6YprY":"./roi_11.044bc36f.ply","7paQD":"./roi_05.54589039.ply","7w3Zb":"./roi_13.9acfdeaf.ply","8vrDb":"./brain.d73925cb.ply","bpLhu":"./roi_09.831e3d29.ply","dIqM5":"./roi_10.1a031523.ply","eJbtV":"./roi_16.d7d544fe.ply","epGte":"./roi_03.9b8dc199.ply","ibz4G":"./roi_labels.75b6f133.ply","j0BRI":"./roi_18.5355b362.ply","j1DFX":"./roi_15.bc3dfbb4.ply","jOK9M":"./roi_14.14690ef2.ply","kkeNK":"./roi_02.39884654.ply","l2mup":"./roi_19.63b6deb2.ply","l9kPC":"./roi_12.f5fdf904.ply"}}</script><meta charset=UTF-8><title>Brain ROI Viewer</title><link rel=stylesheet href=roi-viz.8060e273.css><body>
+<!DOCTYPE html><html lang="en"><head><script type="importmap">{"imports":{"2CQor":"/roi_09.c5436877.ply","2Rgpg":"/roi_08.2ce5dd2c.ply","3HaCN":"/roi_04.c91c0780.ply","5fnB9":"/roi_18.552e5403.ply","5gAae":"/roi_10.2c0f7622.ply","7DYbf":"/roi_16.f17ebde7.ply","9EqOI":"/roi_02.d23185b2.ply","9Uaj1":"/roi_06.329dbf6b.ply","Hr1rX":"/roi_19.aea30f23.ply","bWsMY":"/roi_01.5efcd610.ply","bh3Si":"/roi_13.5a194169.ply","byFr1":"/roi_03.9b1cd79c.ply","cp7tM":"/roi_15.5ea16053.ply","gIujp":"/roi_12.5a14c6f2.ply","iCms7":"/roi_14.e843a75a.ply","jNsGO":"/roi_11.38255b94.ply","jfFbh":"/brain.cfb680a2.ply","jratP":"/roi_07.60dc3207.ply","jxILS":"/roi_05.dfed283b.ply","kW4kC":"/roi_17.43fb1d9f.ply","n3bTc":"/roi_labels.472fd7e7.ply"}}</script>
+  <meta charset="UTF-8">
+  <title>Brain ROI Viewer</title>
+  <link rel="stylesheet" href="/roi-viz.2cdaf7bc.css">
+</head>
+<body>
 
-  
-  <div id=ui>
-    <label for=datasetSelect><b>Dataset</b></label><br>
-    <select id=datasetSelect>
-      <option value=datasets/mni>MNI (19 ROIs)</option>
-      <option value=datasets/nsd_subj01>Subject 01</option>
+  <!-- UI -->
+  <div id="ui">
+    <label for="datasetSelect"><b>Dataset</b></label><br>
+    <select id="datasetSelect">
+      <option value="datasets/mni">MNI (19 ROIs)</option>
+      <option value="datasets/nsd_subj01">Subject 01</option>
     </select>
   </div>
 
-  <canvas id=c></canvas>
+  <canvas id="c"></canvas>
 
-  
-   
+  <!-- Three.js canvas -->
+   <!--
+  <div id="viewer"></div>
+  -->
 
-  <script type=module src=roi-viz.a3e3c72e.js></script>
+  <script type="module" src="/roi-viz.1fcc916e.js"></script>
 
 
+</body></html>
