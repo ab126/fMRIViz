@@ -1,9 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
-//import roiFiles from "./roiFiles.js";
-//import {roiFiles} from '../public/datasets/mni/roiFiles.js';
-//import * as roiFiles from '../public/datasets/mni/roiFiles.js';
 import metaData from './assets/datasets/mni/metaData.js'
 
 /* ------------------------------------------------------------------
@@ -82,50 +79,6 @@ select.addEventListener("change", e => {
 
 // initial load
 loadDataset(select.value);
-
-/*
-const brainURL = new URL('./brain.ply', import.meta.url);
-
-loader.load(brainURL, geometry => {
-  geometry.computeVertexNormals();
-
-  const brainMesh = new THREE.Mesh(geometry, brainMaterial);
-  scene.add(brainMesh);
-  brainMesh.renderOrder = 0;
-});
-
-
-// Load ROIs
-// entries.forEach(([path, url], i) => {
-roiFiles.forEach((url, i) => {
-  loader.load(
-    url,
-    geometry => {
-      geometry.computeVertexNormals();
-
-      const roi = new THREE.Mesh(geometry, roiBaseMaterial.clone());
-      roi.material.color.copy( vedoRainbow(i / (roiFiles.length - 1)) );
-      roi.name = `ROI_${String(i).padStart(2, '0')}`;
-
-      scene.add(roi);
-      //roi.renderOrder   = 1;
-      },
-    undefined,
-    err => console.error("Failed to load", path, err)
-  );
-});
-
-
-// Labels
-const labelsURL = new URL('./roi_labels.ply', import.meta.url);
-
-loader.load(labelsURL, geometry => {
-  geometry.computeVertexNormals();
-
-  const labelsMesh = new THREE.Mesh(geometry, roiLabelsMaterial);
-  scene.add(labelsMesh);
-});
-*/
 
 /* ------------------------------------------------------------------
    UTILITIES

@@ -1,5 +1,4 @@
 
-dist/
 node_modules/
 .parcel-cache
 webpages/roi-viz/public/
