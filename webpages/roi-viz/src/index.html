@@ -2,15 +2,27 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <title>Brain Viewer</title>
-  <style>
-    body { margin: 0; overflow: hidden; }
-  </style>
+  <title>Brain ROI Viewer</title>
+  <link rel="stylesheet" href="./style.css">
 </head>
 <body>
 
-<canvas id="c"></canvas>
+  <!-- UI -->
+  <div id="ui">
+    <label for="datasetSelect"><b>Dataset</b></label><br />
+    <select id="datasetSelect">
+      <option value="datasets/mni">MNI (19 ROIs)</option>
+      <option value="datasets/nsd_subj01">Subject 01</option>
+    </select>
+  </div>
 
-<script type="module" src="./main.js"></script>
+  <canvas id="c"></canvas>
+
+  <!-- Three.js canvas -->
+   <!--
+  <div id="viewer"></div>
+  -->
+
+  <script type="module" src="./main.js"></script>
 </body>
 </html>
