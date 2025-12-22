@@ -1,7 +1,19 @@
-<!DOCTYPE html><html lang=en><meta charset=UTF-8><title>Brain Viewer</title><style>body{margin:0;overflow:hidden}</style><body>
+<!DOCTYPE html><html lang=en><script type=importmap>{"imports":{"2VMUz":"./roi_06.b3819c14.ply","3AeF6":"./roi_07.7f2bc301.ply","40v2W":"./roi_08.f93a9bdf.ply","4fYU8":"./roi_01.deeeb680.ply","4hHFf":"./roi_17.b9590694.ply","56gHv":"./roi_04.66e2c0cb.ply","6YprY":"./roi_11.044bc36f.ply","7paQD":"./roi_05.54589039.ply","7w3Zb":"./roi_13.9acfdeaf.ply","8vrDb":"./brain.d73925cb.ply","bpLhu":"./roi_09.831e3d29.ply","dIqM5":"./roi_10.1a031523.ply","eJbtV":"./roi_16.d7d544fe.ply","epGte":"./roi_03.9b8dc199.ply","ibz4G":"./roi_labels.75b6f133.ply","j0BRI":"./roi_18.5355b362.ply","j1DFX":"./roi_15.bc3dfbb4.ply","jOK9M":"./roi_14.14690ef2.ply","kkeNK":"./roi_02.39884654.ply","l2mup":"./roi_19.63b6deb2.ply","l9kPC":"./roi_12.f5fdf904.ply"}}</script><meta charset=UTF-8><title>Brain ROI Viewer</title><link rel=stylesheet href=roi-viz.8060e273.css><body>
 
-<canvas id=c></canvas>
+  
+  <div id=ui>
+    <label for=datasetSelect><b>Dataset</b></label><br>
+    <select id=datasetSelect>
+      <option value=datasets/mni>MNI (19 ROIs)</option>
+      <option value=datasets/nsd_subj01>Subject 01</option>
+    </select>
+  </div>
 
-<script type=module src=roi-viz.3a14b610.js></script>
+  <canvas id=c></canvas>
+
+  
+   
+
+  <script type=module src=roi-viz.a3e3c72e.js></script>
 
 
