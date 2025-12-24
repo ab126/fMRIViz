@@ -2,6 +2,7 @@ import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import metaData from './assets/datasets/mni/metaData.js'
+import regionsMeta from './assets/datasets/mni/bna/metaData.js'
 
 /* ------------------------------------------------------------------
    BASIC THREE SETUP
@@ -45,6 +46,10 @@ scene.add(new THREE.AxesHelper(100));
 
 const loader = new PLYLoader();
 const loadedObjects = [];
+const atlasGroup = new THREE.Group();
+scene.add(atlasGroup);
+const roiGroup = new THREE.Group();
+scene.add(roiGroup);
 
 const brainMaterial = new THREE.MeshStandardMaterial({
   color: 0xe0e0e0,
@@ -71,6 +76,12 @@ const roiLabelsMaterial = new THREE.LineBasicMaterial({
   opacity: 0.80,
   side: THREE.DoubleSide
 });
+
+const atlasRegionMaterial = new THREE.MeshStandardMaterial({
+  color: 0xaaaaaa,
+  transparent: true,
+  opacity: 0.35
+})
 
 const select = document.getElementById("datasetSelect")
 select.addEventListener("change", e => {
@@ -120,6 +131,8 @@ async function loadDataset(datasetRoot) {
   });
 
   loadROILabels(metaData.roiLabelsURL);
+
+  loadAtlas(`${datasetRoot}/bna`);
 }
 
 function loadBrain(brainURL) {
@@ -152,8 +165,8 @@ function loadROI(roiURL, index, total) {
       );
       roi.name = `ROI_${String(index).padStart(2, '0')}`;
       //roi.renderOrder = 1;
-
-      scene.add(roi);
+      
+      roiGroup.add(roi);
       loadedObjects.push(roi);
     }
   );
@@ -164,11 +177,37 @@ function loadROILabels(roiLabelsURL){
     geometry.computeVertexNormals();
 
     const labelsMesh = new THREE.Mesh(geometry, roiLabelsMaterial);
-    scene.add(labelsMesh);
+    roiGroup.add(labelsMesh);
     loadedObjects.push(labelsMesh);
-    //labelsMesh.renderOrder = 0;
+    //labelsMesh.renderOrder = 1;
   });
 }
+
+async function loadAtlas(atlasRoot) { // TODO: Fetch doesnt work, gotta do with exports
+
+  regionsMeta.forEach( (region, i) => {
+    loader.load(
+      new URL(`./assets/datasets/mni/bna/${region.file}`, import.meta.url), // This dont work either
+      (gltf) => {
+        const mesh = gltf.scene;
+        mesh.name = region.id; //`${region.name}: ${region.desc}`;
+        mesh.userData = region;
+
+        mesh.traverse(obj => {
+          if (obj.isMesh) {
+            obj.material = atlasRegionMaterial.clone();
+            obj.material.color.copy(
+              vedoRainbow((i - 1) / (regionsMeta.length - 1))
+            );
+          }
+        });
+
+        atlasGroup.add(mesh);
+      }
+    );
+  })
+}
+
 
 // Vedo-like Rainbow colormap
 function vedoRainbow(t) {

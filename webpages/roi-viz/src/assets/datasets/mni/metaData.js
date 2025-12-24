@@ -1,7 +1,5 @@
 // List of ROI files compatible parcel bundling
 
-export const brainURL = new URL("./brain.ply", import.meta.url);
-
 export default { brainURL : new URL("./brain.ply", import.meta.url),
   roiURLs: [
     new URL("./rois/roi_01.ply", import.meta.url),
@@ -24,5 +22,6 @@ export default { brainURL : new URL("./brain.ply", import.meta.url),
     new URL("./rois/roi_18.ply", import.meta.url),
     new URL("./rois/roi_19.ply", import.meta.url),
   ],
-  roiLabelsURL: new URL(".//roi_labels.ply", import.meta.url)
+  roiLabelsURL: new URL("./roi_labels.ply", import.meta.url)
 };
+
