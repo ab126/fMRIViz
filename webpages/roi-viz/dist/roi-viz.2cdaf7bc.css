@@ -21,4 +21,40 @@ html, body {
   width: 100vw;
   height: 100vh;
 }
+
+#tooltip {
+  pointer-events: none;
+  color: #fff;
+  background: #000c;
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 12px;
+  display: none;
+  position: absolute;
+}
+
+#region-panel {
+  color: #eee;
+  pointer-events: auto;
+  background: #141414f2;
+  border-radius: 8px;
+  width: 260px;
+  max-height: 50vh;
+  padding: 12px;
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  overflow-y: auto;
+  box-shadow: 0 4px 16px #0006;
+}
+
+#region-panel h3 {
+  color: #fc6;
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+#region-panel small {
+  color: #aaa;
+}
 /*# sourceMappingURL=roi-viz.2cdaf7bc.css.map */

@@ -720,8 +720,8 @@ var _orbitControlsJs = require("three/examples/jsm/controls/OrbitControls.js");
 var _plyloaderJs = require("three/examples/jsm/loaders/PLYLoader.js");
 var _metaDataJs = require("./assets/datasets/mni/metaData.js");
 var _metaDataJsDefault = parcelHelpers.interopDefault(_metaDataJs);
-var _metaDataJs1 = require("./assets/datasets/mni/bna/metaData.js");
-var _metaDataJsDefault1 = parcelHelpers.interopDefault(_metaDataJs1);
+var _19RoiAtlasMetaDataJs = require("./assets/datasets/mni/bna/19roiAtlasMetaData.js");
+var _19RoiAtlasMetaDataJsDefault = parcelHelpers.interopDefault(_19RoiAtlasMetaDataJs);
 /* ------------------------------------------------------------------
    BASIC THREE SETUP
 ------------------------------------------------------------------ */ const canvas = document.getElementById("c");
@@ -755,7 +755,7 @@ scene.add(roiGroup);
 const brainMaterial = new _three.MeshStandardMaterial({
     color: 0xe0e0e0,
     transparent: true,
-    opacity: 0.15,
+    opacity: 0.25,
     depthWrite: false,
     roughness: 0.8,
     metalness: 0.0,
@@ -776,9 +776,18 @@ const roiLabelsMaterial = new _three.LineBasicMaterial({
     side: _three.DoubleSide
 });
 const atlasRegionMaterial = new _three.MeshStandardMaterial({
-    color: 0xaaaaaa,
+    color: '#ffffff',
     transparent: true,
-    opacity: 0.35
+    opacity: 0.35,
+    emissive: new _three.Color(0x000000),
+    depthWrite: true
+});
+const selectRegionMaterial = new _three.MeshStandardMaterial({
+    color: '#57db0a',
+    transparent: true,
+    opacity: 0.35,
+    emissive: new _three.Color('#fbf8f8'),
+    depthWrite: true
 });
 const select = document.getElementById("datasetSelect");
 select.addEventListener("change", (e)=>{
@@ -787,8 +796,84 @@ select.addEventListener("change", (e)=>{
 // initial load
 loadDataset(select.value);
 /* ------------------------------------------------------------------
+   RAY CASTING / HOVERING / INTERACTING
+------------------------------------------------------------------ */ const raycaster = new _three.Raycaster();
+const mouse = new _three.Vector2();
+const tooltip = document.getElementById("tooltip");
+let hoveredMesh = null;
+// Hover
+renderer.domElement.addEventListener("mousemove", (event)=>{
+    const hits = getIntersections(event, atlasGroup.children);
+    if (hits.length > 0) {
+        const mesh = hits[0].object;
+        if (hoveredMesh !== mesh) {
+            if (hoveredMesh && (hoveredMesh !== selectedMesh || selectedMesh === null)) hoveredMesh.material.emissive.copy(hoveredMesh.userData.baseEmissive);
+            hoveredMesh = mesh;
+            if (hoveredMesh !== selectedMesh) hoveredMesh.material.emissive?.set('#fbf8f8');
+        }
+        tooltip.style.display = "block";
+        tooltip.style.left = `${event.clientX + 10}px`;
+        tooltip.style.top = `${event.clientY + 10}px`;
+        const r = mesh.userData;
+        tooltip.innerHTML = `
+      <b>${r.gyrus ?? ""}</b><br/>
+      ${r.desc ?? ""}<br/>
+      <small>${r.atlas ?? ""}</small>
+    `;
+    } else {
+        tooltip.style.display = "none";
+        if (hoveredMesh && (hoveredMesh !== selectedMesh || selectedMesh === null)) hoveredMesh.material.emissive.copy(hoveredMesh.userData.baseEmissive);
+        hoveredMesh = null;
+    }
+});
+// Click
+let selectedMesh = null;
+let restoreMaterial = null;
+renderer.domElement.addEventListener("click", (event)=>{
+    const hits = getIntersections(event, atlasGroup.children);
+    if (!hits.length) return;
+    const mesh = hits[0].object;
+    // Clicking the same region → unselect
+    if (selectedMesh === mesh) {
+        mesh.material.color.copy(mesh.userData.baseColor);
+        mesh.material.emissive.copy(mesh.userData.baseEmissive);
+        selectedMesh = null;
+        clearRegionPanel();
+        return;
+    }
+    // Restore previous object material
+    if (selectedMesh) {
+        selectedMesh.material.color.copy(selectedMesh.userData.baseColor);
+        selectedMesh.material.emissive.copy(selectedMesh.userData.baseEmissive);
+    }
+    selectedMesh = mesh; // New select
+    selectedMesh.material.color.set('#ffffff');
+    selectedMesh.material.emissive.set('#fbf8f8');
+    showRegionPanel(mesh.userData);
+});
+/* ------------------------------------------------------------------
    UTILITIES
------------------------------------------------------------------- */ async function verifyFile(url) {
+------------------------------------------------------------------ */ function getIntersections(event, objects) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    mouse.x = (event.clientX - rect.left) / rect.width * 2 - 1;
+    mouse.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+    return raycaster.intersectObjects(objects, true);
+}
+function showRegionPanel(region) {
+    const panel = document.getElementById("region-panel");
+    const hemi = region.desc.split(" ")[0] === "R" ? "Right" : region.desc.split(" ")[0] === "L" ? "Left" : "Undefined";
+    panel.innerHTML = `
+    <h3>${region.gyrus}</h3>
+    <p>${region.desc}</p>
+    <ul>
+      <li><b>Atlas:</b> Brainnetome Atlas</li>
+      <li><b>ID:</b> ${region.id}</li>
+      <li><b>Hemisphere:</b> ${hemi}</li>
+    </ul>
+  `;
+}
+async function verifyFile(url) {
     try {
         const res = await fetch(url);
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -809,19 +894,23 @@ function clearScene() {
     }
     loadedObjects.length = 0;
 }
+function clearRegionPanel() {
+    const panel = document.getElementById("region-panel");
+    panel.innerHTML = "<small>Click an anatomical region</small>";
+}
 // Load Functions //TODO: select from the path here
 async function loadDataset(datasetRoot) {
     // Clear scene
     clearScene();
     // Load metadata
     loadBrain((0, _metaDataJsDefault.default).brainURL);
+    loadAtlas(`${datasetRoot}/bna`);
     (0, _metaDataJsDefault.default).roiURLs.forEach((roiPath, i)=>{
         loadROI(roiPath, i, (0, _metaDataJsDefault.default).roiURLs.length);
     });
     loadROILabels((0, _metaDataJsDefault.default).roiLabelsURL);
-    loadAtlas(`${datasetRoot}/bna`);
 }
-function loadBrain(brainURL) {
+async function loadBrain(brainURL) {
     // --- Brain ---
     loader.load(brainURL, (geometry)=>{
         geometry.computeVertexNormals();
@@ -829,54 +918,160 @@ function loadBrain(brainURL) {
         brain.name = "brain";
         scene.add(brain);
         loadedObjects.push(brain);
-    //brain.renderOrder = 0;
+    //brain.renderOrder = 1;
     });
 }
-function loadROI(roiURL, index, total) {
+async function loadROI(roiURL, index, total) {
     loader.load(//new URL(path, import.meta.url),
     roiURL, (geometry)=>{
         geometry.computeVertexNormals();
         const roi = new _three.Mesh(geometry, roiBaseMaterial.clone());
-        roi.material.color.copy(vedoRainbow((index - 1) / (total - 1)));
+        roi.material.color.copy(hslQualitativeColor(index / (total - 1)) // twilightNonCyclic rainbowColormap hslQualitativeColor
+        );
         roi.name = `ROI_${String(index).padStart(2, '0')}`;
-        //roi.renderOrder = 1;
+        roi.renderOrder = 0;
         roiGroup.add(roi);
         loadedObjects.push(roi);
     });
 }
-function loadROILabels(roiLabelsURL) {
+async function loadROILabels(roiLabelsURL) {
     loader.load(roiLabelsURL, (geometry)=>{
         geometry.computeVertexNormals();
         const labelsMesh = new _three.Mesh(geometry, roiLabelsMaterial);
         roiGroup.add(labelsMesh);
         loadedObjects.push(labelsMesh);
-    //labelsMesh.renderOrder = 1;
+        labelsMesh.renderOrder = 0;
     });
 }
-async function loadAtlas(atlasRoot) {
-    (0, _metaDataJsDefault1.default).forEach((region, i)=>{
-        loader.load(new URL(`./assets/datasets/mni/bna/${region.file}`, "file:///src/main.js"), (gltf)=>{
-            const mesh = gltf.scene;
-            mesh.name = region.id; //`${region.name}: ${region.desc}`;
+async function loadAtlas(atlasRoot, atlasName = null) {
+    const total = (0, _19RoiAtlasMetaDataJsDefault.default).regionsMeta.length;
+    (0, _19RoiAtlasMetaDataJsDefault.default).regionURLs.forEach((regionURL, i)=>{
+        if (i >= 300) return;
+        const region = (0, _19RoiAtlasMetaDataJsDefault.default).regionsMeta[i];
+        loader.load(regionURL, (geometry)=>{
+            //geometry.computeVertexNormals();
+            const mesh = new _three.Mesh(geometry, atlasRegionMaterial.clone());
+            mesh.material.color.copy(fireColormap(i / total) // winterColormap twilightNonCyclic fireColormap
+            );
+            mesh.name = `${region.name}: ${region.desc}`;
+            mesh.regionID = i;
             mesh.userData = region;
-            mesh.traverse((obj)=>{
-                if (obj.isMesh) {
-                    obj.material = atlasRegionMaterial.clone();
-                    obj.material.color.copy(vedoRainbow((i - 1) / ((0, _metaDataJsDefault1.default).length - 1)));
-                }
-            });
+            mesh.userData.name = mesh.userData.gyrus;
+            mesh.userData.baseColor = mesh.material.color.clone();
+            mesh.userData.baseEmissive = mesh.material.emissive.clone();
+            mesh.userData.atlas = atlasName;
+            mesh.renderOrder = 1;
             atlasGroup.add(mesh);
         });
     });
 }
-// Vedo-like Rainbow colormap
-function vedoRainbow(t) {
+// Colormaps
+function rainbowColormap(t) {
     // t in [0,1]
     const r = Math.min(1, Math.max(0, 1.5 - Math.abs(4 * t - 3)));
     const g = Math.min(1, Math.max(0, 1.5 - Math.abs(4 * t - 2)));
     const b = Math.min(1, Math.max(0, 1.5 - Math.abs(4 * t - 1)));
     return new _three.Color(r, g, b);
 }
+function viridisColormap(t) {
+    // t in [0,1]
+    t = Math.min(1, Math.max(0, t));
+    const r = 0.277727 + 0.105093 * t + 0.585332 * t ** 2 - 0.444481 * t ** 3;
+    const g = 0.005407 + 1.404613 * t - 1.703593 * t ** 2 + 0.745394 * t ** 3;
+    const b = 0.334099 + 1.384590 * t - 2.058563 * t ** 2 + 0.750006 * t ** 3;
+    return new _three.Color(Math.min(1, Math.max(0, r)), Math.min(1, Math.max(0, g)), Math.min(1, Math.max(0, b)));
+}
+function winterColormap(t) {
+    // t in [0,1]
+    t = Math.max(0, Math.min(1, t));
+    const r = 0.0;
+    const g = t;
+    const b = 1.0 - 0.5 * t;
+    return new _three.Color(r, g, b);
+}
+function twilightNonCyclic(t) {
+    // t in [0, 1]
+    // clamp
+    t = Math.max(0, Math.min(1, t));
+    // Manually chosen anchor points approximating twilight
+    // Hue in degrees, Saturation %, Lightness %
+    const stops = [
+        {
+            t: 0.0,
+            h: 250,
+            s: 60,
+            l: 25
+        },
+        {
+            t: 0.35,
+            h: 200,
+            s: 70,
+            l: 45
+        },
+        {
+            t: 0.65,
+            h: 40,
+            s: 80,
+            l: 55
+        },
+        {
+            t: 1.0,
+            h: 300,
+            s: 60,
+            l: 70
+        } // soft magenta-gray
+    ];
+    // find segment
+    let i = 0;
+    while(i < stops.length - 1 && t > stops[i + 1].t)i++;
+    const a = stops[i];
+    const b = stops[i + 1];
+    const u = (t - a.t) / (b.t - a.t);
+    // interpolate
+    const h = a.h + u * (b.h - a.h);
+    const s = a.s + u * (b.s - a.s);
+    const l = a.l + u * (b.l - a.l);
+    const color = new _three.Color();
+    color.setHSL(h / 360, s / 100, l / 100);
+    return color;
+}
+function fireColormap(t) {
+    // t in [0,1]
+    t = Math.min(Math.max(t, 0), 1);
+    let r, g, b;
+    if (t < 0.33) {
+        // black → red
+        r = t / 0.33;
+        g = 0;
+        b = 0;
+    } else if (t < 0.66) {
+        // red → yellow
+        r = 1;
+        g = (t - 0.33) / 0.33;
+        b = 0;
+    } else {
+        // yellow → white
+        r = 1;
+        g = 1;
+        b = (t - 0.66) / 0.34;
+    }
+    return new _three.Color(r, g, b);
+}
+function hslQualitativeColor(t) {
+    // Golden angle ensures good separation even for many regions. i is integer
+    // t in [0, 1]
+    const goldenAngle = 137.508; // degrees
+    // Hue in [0, 360)
+    const hue = t * 360 //(i * goldenAngle) % 360;
+    ;
+    // Fixed saturation/lightness → stable under lighting & opacity
+    const saturation = 0.95; // .55
+    const lightness = 0.25; // .55
+    const color = new _three.Color();
+    color.setHSL(hue / 360, saturation, lightness);
+    return color;
+}
+// Three.js Basics
 function animate() {
     requestAnimationFrame(animate);
     controls.update();
@@ -889,7 +1084,7 @@ window.addEventListener("resize", ()=>{
     renderer.setSize(window.innerWidth, window.innerHeight);
 });
 
-},{"three":"dsoTF","three/examples/jsm/controls/OrbitControls.js":"45ipX","three/examples/jsm/loaders/PLYLoader.js":"1yxEQ","./assets/datasets/mni/metaData.js":"7s4sn","./assets/datasets/mni/bna/metaData.js":"a8Ini","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"dsoTF":[function(require,module,exports,__globalThis) {
+},{"three":"dsoTF","three/examples/jsm/controls/OrbitControls.js":"45ipX","three/examples/jsm/loaders/PLYLoader.js":"1yxEQ","./assets/datasets/mni/metaData.js":"7s4sn","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT","./assets/datasets/mni/bna/19roiAtlasMetaData.js":"6Frr9"}],"dsoTF":[function(require,module,exports,__globalThis) {
 /**
  * @license
  * Copyright 2010-2025 Three.js Authors
@@ -54719,8 +54914,8 @@ module.exports = module.bundle.resolve("roi_19.aea30f23.ply") + "?" + Date.now()
 },{}],"a7Izd":[function(require,module,exports,__globalThis) {
 module.exports = module.bundle.resolve("roi_labels.472fd7e7.ply") + "?" + Date.now();
 
-},{}],"a8Ini":[function(require,module,exports,__globalThis) {
-// Metadata about the anatomical atlas regions
+},{}],"6Frr9":[function(require,module,exports,__globalThis) {
+// Metadata about the Brainnetome anatomical atlas
 var parcelHelpers = require("@parcel/transformer-js/src/esmodule-helpers.js");
 parcelHelpers.defineInteropFlag(exports);
 exports.default = {
@@ -54966,738 +55161,6 @@ exports.default = {
             "file": "region_040.ply"
         },
         {
-            "id": 41,
-            "gyrus": "Orbital Gyrus",
-            "desc": "L medial area 14",
-            "file": "region_041.ply"
-        },
-        {
-            "id": 42,
-            "gyrus": "Orbital Gyrus",
-            "desc": "R medial area 14",
-            "file": "region_042.ply"
-        },
-        {
-            "id": 43,
-            "gyrus": "Orbital Gyrus",
-            "desc": "L orbital area 12/47",
-            "file": "region_043.ply"
-        },
-        {
-            "id": 44,
-            "gyrus": "Orbital Gyrus",
-            "desc": "R orbital area 12/47",
-            "file": "region_044.ply"
-        },
-        {
-            "id": 45,
-            "gyrus": "Orbital Gyrus",
-            "desc": "L lateral area 11",
-            "file": "region_045.ply"
-        },
-        {
-            "id": 46,
-            "gyrus": "Orbital Gyrus",
-            "desc": "R lateral area 11",
-            "file": "region_046.ply"
-        },
-        {
-            "id": 47,
-            "gyrus": "Orbital Gyrus",
-            "desc": "L medial area 11",
-            "file": "region_047.ply"
-        },
-        {
-            "id": 48,
-            "gyrus": "Orbital Gyrus",
-            "desc": "R medial area 11",
-            "file": "region_048.ply"
-        },
-        {
-            "id": 49,
-            "gyrus": "Orbital Gyrus",
-            "desc": "L area 13",
-            "file": "region_049.ply"
-        },
-        {
-            "id": 50,
-            "gyrus": "Orbital Gyrus",
-            "desc": "R area 13",
-            "file": "region_050.ply"
-        },
-        {
-            "id": 51,
-            "gyrus": "Orbital Gyrus",
-            "desc": "L lateral area 12/47",
-            "file": "region_051.ply"
-        },
-        {
-            "id": 52,
-            "gyrus": "Orbital Gyrus",
-            "desc": "R lateral area 12/47",
-            "file": "region_052.ply"
-        },
-        {
-            "id": 53,
-            "gyrus": "Precentral Gyrus",
-            "desc": "L area 4(head and face region)",
-            "file": "region_053.ply"
-        },
-        {
-            "id": 54,
-            "gyrus": "Precentral Gyrus",
-            "desc": "R area 4(head and face region)",
-            "file": "region_054.ply"
-        },
-        {
-            "id": 55,
-            "gyrus": "Precentral Gyrus",
-            "desc": "L caudal dorsolateral area 6",
-            "file": "region_055.ply"
-        },
-        {
-            "id": 56,
-            "gyrus": "Precentral Gyrus",
-            "desc": "R caudal dorsolateral area 6",
-            "file": "region_056.ply"
-        },
-        {
-            "id": 57,
-            "gyrus": "Precentral Gyrus",
-            "desc": "L area 4(upper limb region)",
-            "file": "region_057.ply"
-        },
-        {
-            "id": 58,
-            "gyrus": "Precentral Gyrus",
-            "desc": "R area 4(upper limb region)",
-            "file": "region_058.ply"
-        },
-        {
-            "id": 59,
-            "gyrus": "Precentral Gyrus",
-            "desc": "L area 4(trunk region)",
-            "file": "region_059.ply"
-        },
-        {
-            "id": 60,
-            "gyrus": "Precentral Gyrus",
-            "desc": "R area 4(trunk region)",
-            "file": "region_060.ply"
-        },
-        {
-            "id": 61,
-            "gyrus": "Precentral Gyrus",
-            "desc": "L area 4(tongue and larynx region)",
-            "file": "region_061.ply"
-        },
-        {
-            "id": 62,
-            "gyrus": "Precentral Gyrus",
-            "desc": "R area 4(tongue and larynx region)",
-            "file": "region_062.ply"
-        },
-        {
-            "id": 63,
-            "gyrus": "Precentral Gyrus",
-            "desc": "L caudal ventrolateral area 6",
-            "file": "region_063.ply"
-        },
-        {
-            "id": 64,
-            "gyrus": "Precentral Gyrus",
-            "desc": "R caudal ventrolateral area 6",
-            "file": "region_064.ply"
-        },
-        {
-            "id": 65,
-            "gyrus": "Paracentral Lobule",
-            "desc": "L area1/2/3 (lower limb region)",
-            "file": "region_065.ply"
-        },
-        {
-            "id": 66,
-            "gyrus": "Paracentral Lobule",
-            "desc": "R area1/2/3 (lower limb region)",
-            "file": "region_066.ply"
-        },
-        {
-            "id": 67,
-            "gyrus": "Paracentral Lobule",
-            "desc": "L area 4",
-            "file": "region_067.ply"
-        },
-        {
-            "id": 68,
-            "gyrus": "Paracentral Lobule",
-            "desc": "R area 4",
-            "file": "region_068.ply"
-        },
-        {
-            "id": 69,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "L medial area 38",
-            "file": "region_069.ply"
-        },
-        {
-            "id": 70,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "R medial area 38",
-            "file": "region_070.ply"
-        },
-        {
-            "id": 71,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "L area 41/42",
-            "file": "region_071.ply"
-        },
-        {
-            "id": 72,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "R area 41/42",
-            "file": "region_072.ply"
-        },
-        {
-            "id": 73,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "L TE1.0 and TE1.2",
-            "file": "region_073.ply"
-        },
-        {
-            "id": 74,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "R TE1.0 and TE1.2",
-            "file": "region_074.ply"
-        },
-        {
-            "id": 75,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "L caudal area 22",
-            "file": "region_075.ply"
-        },
-        {
-            "id": 76,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "R caudal area 22",
-            "file": "region_076.ply"
-        },
-        {
-            "id": 77,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "L lateral area 38",
-            "file": "region_077.ply"
-        },
-        {
-            "id": 78,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "R lateral area 38",
-            "file": "region_078.ply"
-        },
-        {
-            "id": 79,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "L rostral area 22",
-            "file": "region_079.ply"
-        },
-        {
-            "id": 80,
-            "gyrus": "Superior Temporal Gyrus",
-            "desc": "R rostral area 22",
-            "file": "region_080.ply"
-        },
-        {
-            "id": 81,
-            "gyrus": "Middle Temporal Gyrus",
-            "desc": "L caudal area 21",
-            "file": "region_081.ply"
-        },
-        {
-            "id": 82,
-            "gyrus": "Middle Temporal Gyrus",
-            "desc": "R caudal area 21",
-            "file": "region_082.ply"
-        },
-        {
-            "id": 83,
-            "gyrus": "Middle Temporal Gyrus",
-            "desc": "L rostral area 21",
-            "file": "region_083.ply"
-        },
-        {
-            "id": 84,
-            "gyrus": "Middle Temporal Gyrus",
-            "desc": "R rostral area 21",
-            "file": "region_084.ply"
-        },
-        {
-            "id": 85,
-            "gyrus": "Middle Temporal Gyrus",
-            "desc": "L dorsolateral area37",
-            "file": "region_085.ply"
-        },
-        {
-            "id": 86,
-            "gyrus": "Middle Temporal Gyrus",
-            "desc": "R dorsolateral area37",
-            "file": "region_086.ply"
-        },
-        {
-            "id": 87,
-            "gyrus": "Middle Temporal Gyrus",
-            "desc": "L anterior superior temporal sulcus",
-            "file": "region_087.ply"
-        },
-        {
-            "id": 88,
-            "gyrus": "Middle Temporal Gyrus",
-            "desc": "R anterior superior temporal sulcus",
-            "file": "region_088.ply"
-        },
-        {
-            "id": 89,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "L intermediate ventral area 20",
-            "file": "region_089.ply"
-        },
-        {
-            "id": 90,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "R intermediate ventral area 20",
-            "file": "region_090.ply"
-        },
-        {
-            "id": 91,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "L extreme lateroventral area37",
-            "file": "region_091.ply"
-        },
-        {
-            "id": 92,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "R extreme lateroventral area37",
-            "file": "region_092.ply"
-        },
-        {
-            "id": 93,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "L rostral area 20",
-            "file": "region_093.ply"
-        },
-        {
-            "id": 94,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "R rostral area 20",
-            "file": "region_094.ply"
-        },
-        {
-            "id": 95,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "L intermediate lateral area 20",
-            "file": "region_095.ply"
-        },
-        {
-            "id": 96,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "R intermediate lateral area 20",
-            "file": "region_096.ply"
-        },
-        {
-            "id": 97,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "L ventrolateral area 37",
-            "file": "region_097.ply"
-        },
-        {
-            "id": 98,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "R ventrolateral area 37",
-            "file": "region_098.ply"
-        },
-        {
-            "id": 99,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "L caudolateral of area 20",
-            "file": "region_099.ply"
-        },
-        {
-            "id": 100,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "R caudolateral of area 20",
-            "file": "region_100.ply"
-        },
-        {
-            "id": 101,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "L caudoventral of area 20",
-            "file": "region_101.ply"
-        },
-        {
-            "id": 102,
-            "gyrus": "Inferior Temporal Gyrus",
-            "desc": "R caudoventral of area 20",
-            "file": "region_102.ply"
-        },
-        {
-            "id": 103,
-            "gyrus": "Fusiform Gyrus",
-            "desc": "L rostroventral area 20",
-            "file": "region_103.ply"
-        },
-        {
-            "id": 104,
-            "gyrus": "Fusiform Gyrus",
-            "desc": "R rostroventral area 20",
-            "file": "region_104.ply"
-        },
-        {
-            "id": 105,
-            "gyrus": "Fusiform Gyrus",
-            "desc": "L medioventral area37",
-            "file": "region_105.ply"
-        },
-        {
-            "id": 106,
-            "gyrus": "Fusiform Gyrus",
-            "desc": "R medioventral area37",
-            "file": "region_106.ply"
-        },
-        {
-            "id": 107,
-            "gyrus": "Fusiform Gyrus",
-            "desc": "L lateroventral area37",
-            "file": "region_107.ply"
-        },
-        {
-            "id": 108,
-            "gyrus": "Fusiform Gyrus",
-            "desc": "R lateroventral area37",
-            "file": "region_108.ply"
-        },
-        {
-            "id": 109,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "L rostral area 35/36",
-            "file": "region_109.ply"
-        },
-        {
-            "id": 110,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "R rostral area 35/36",
-            "file": "region_110.ply"
-        },
-        {
-            "id": 111,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "L caudal area 35/36",
-            "file": "region_111.ply"
-        },
-        {
-            "id": 112,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "R caudal area 35/36",
-            "file": "region_112.ply"
-        },
-        {
-            "id": 113,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "L area TL (lateral PPHC, posterior parahippocampal gyrus)",
-            "file": "region_113.ply"
-        },
-        {
-            "id": 114,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "R area TL (lateral PPHC, posterior parahippocampal gyrus)",
-            "file": "region_114.ply"
-        },
-        {
-            "id": 115,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "L area 28/34 (EC, entorhinal cortex)",
-            "file": "region_115.ply"
-        },
-        {
-            "id": 116,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "R area 28/34 (EC, entorhinal cortex)",
-            "file": "region_116.ply"
-        },
-        {
-            "id": 117,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "L area TI(temporal agranular insular cortex)",
-            "file": "region_117.ply"
-        },
-        {
-            "id": 118,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "R area TI(temporal agranular insular cortex)",
-            "file": "region_118.ply"
-        },
-        {
-            "id": 119,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "L area TH (medial PPHC)",
-            "file": "region_119.ply"
-        },
-        {
-            "id": 120,
-            "gyrus": "Parahippocampal Gyrus",
-            "desc": "R area TH (medial PPHC)",
-            "file": "region_120.ply"
-        },
-        {
-            "id": 121,
-            "gyrus": "posterior Superior Temporal Sulcus",
-            "desc": "L rostroposterior superior temporal sulcus",
-            "file": "region_121.ply"
-        },
-        {
-            "id": 122,
-            "gyrus": "posterior Superior Temporal Sulcus",
-            "desc": "R rostroposterior superior temporal sulcus",
-            "file": "region_122.ply"
-        },
-        {
-            "id": 123,
-            "gyrus": "posterior Superior Temporal Sulcus",
-            "desc": "L caudoposterior superior temporal sulcus",
-            "file": "region_123.ply"
-        },
-        {
-            "id": 124,
-            "gyrus": "posterior Superior Temporal Sulcus",
-            "desc": "R caudoposterior superior temporal sulcus",
-            "file": "region_124.ply"
-        },
-        {
-            "id": 125,
-            "gyrus": "Superior Parietal Lobule",
-            "desc": "L rostral area 7",
-            "file": "region_125.ply"
-        },
-        {
-            "id": 126,
-            "gyrus": "Superior Parietal Lobule",
-            "desc": "R rostral area 7",
-            "file": "region_126.ply"
-        },
-        {
-            "id": 127,
-            "gyrus": "Superior Parietal Lobule",
-            "desc": "L caudal area 7",
-            "file": "region_127.ply"
-        },
-        {
-            "id": 128,
-            "gyrus": "Superior Parietal Lobule",
-            "desc": "R caudal area 7",
-            "file": "region_128.ply"
-        },
-        {
-            "id": 129,
-            "gyrus": "Superior Parietal Lobule",
-            "desc": "L lateral area 5",
-            "file": "region_129.ply"
-        },
-        {
-            "id": 130,
-            "gyrus": "Superior Parietal Lobule",
-            "desc": "R lateral area 5",
-            "file": "region_130.ply"
-        },
-        {
-            "id": 131,
-            "gyrus": "Superior Parietal Lobule",
-            "desc": "L postcentral area 7",
-            "file": "region_131.ply"
-        },
-        {
-            "id": 132,
-            "gyrus": "Superior Parietal Lobule",
-            "desc": "R postcentral area 7",
-            "file": "region_132.ply"
-        },
-        {
-            "id": 133,
-            "gyrus": "Superior Parietal Lobule",
-            "desc": "L intraparietal area 7(hIP3)",
-            "file": "region_133.ply"
-        },
-        {
-            "id": 134,
-            "gyrus": "Superior Parietal Lobule",
-            "desc": "R intraparietal area 7(hIP3)",
-            "file": "region_134.ply"
-        },
-        {
-            "id": 135,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "L caudal area 39(PGp)",
-            "file": "region_135.ply"
-        },
-        {
-            "id": 136,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "R caudal area 39(PGp)",
-            "file": "region_136.ply"
-        },
-        {
-            "id": 137,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "L rostrodorsal area 39(Hip3)",
-            "file": "region_137.ply"
-        },
-        {
-            "id": 138,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "R rostrodorsal area 39(Hip3)",
-            "file": "region_138.ply"
-        },
-        {
-            "id": 139,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "L rostrodorsal area 40(PFt)",
-            "file": "region_139.ply"
-        },
-        {
-            "id": 140,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "R rostrodorsal area 40(PFt)",
-            "file": "region_140.ply"
-        },
-        {
-            "id": 141,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "L caudal area 40(PFm)",
-            "file": "region_141.ply"
-        },
-        {
-            "id": 142,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "R caudal area 40(PFm)",
-            "file": "region_142.ply"
-        },
-        {
-            "id": 143,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "L rostroventral area 39(PGa)",
-            "file": "region_143.ply"
-        },
-        {
-            "id": 144,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "R rostroventral area 39(PGa)",
-            "file": "region_144.ply"
-        },
-        {
-            "id": 145,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "L rostroventral area 40(PFop)",
-            "file": "region_145.ply"
-        },
-        {
-            "id": 146,
-            "gyrus": "Inferior Parietal Lobule",
-            "desc": "R rostroventral area 40(PFop)",
-            "file": "region_146.ply"
-        },
-        {
-            "id": 147,
-            "gyrus": "Precuneus",
-            "desc": "L medial area 7(PEp)",
-            "file": "region_147.ply"
-        },
-        {
-            "id": 148,
-            "gyrus": "Precuneus",
-            "desc": "R medial area 7(PEp)",
-            "file": "region_148.ply"
-        },
-        {
-            "id": 149,
-            "gyrus": "Precuneus",
-            "desc": "L medial area 5(PEm)",
-            "file": "region_149.ply"
-        },
-        {
-            "id": 150,
-            "gyrus": "Precuneus",
-            "desc": "R medial area 5(PEm)",
-            "file": "region_150.ply"
-        },
-        {
-            "id": 151,
-            "gyrus": "Precuneus",
-            "desc": "L dorsomedial parietooccipital  sulcus(PEr)",
-            "file": "region_151.ply"
-        },
-        {
-            "id": 152,
-            "gyrus": "Precuneus",
-            "desc": "R dorsomedial parietooccipital  sulcus(PEr)",
-            "file": "region_152.ply"
-        },
-        {
-            "id": 153,
-            "gyrus": "Precuneus",
-            "desc": "L area 31 (Lc1)",
-            "file": "region_153.ply"
-        },
-        {
-            "id": 154,
-            "gyrus": "Precuneus",
-            "desc": "R area 31 (Lc1)",
-            "file": "region_154.ply"
-        },
-        {
-            "id": 155,
-            "gyrus": "Postcentral Gyrus",
-            "desc": "L area 1/2/3(upper limb, head and face region)",
-            "file": "region_155.ply"
-        },
-        {
-            "id": 156,
-            "gyrus": "Postcentral Gyrus",
-            "desc": "R area 1/2/3(upper limb, head and face region)",
-            "file": "region_156.ply"
-        },
-        {
-            "id": 157,
-            "gyrus": "Postcentral Gyrus",
-            "desc": "L area 1/2/3(tongue and larynx region)",
-            "file": "region_157.ply"
-        },
-        {
-            "id": 158,
-            "gyrus": "Postcentral Gyrus",
-            "desc": "R area 1/2/3(tongue and larynx region)",
-            "file": "region_158.ply"
-        },
-        {
-            "id": 159,
-            "gyrus": "Postcentral Gyrus",
-            "desc": "L area 2",
-            "file": "region_159.ply"
-        },
-        {
-            "id": 160,
-            "gyrus": "Postcentral Gyrus",
-            "desc": "R area 2",
-            "file": "region_160.ply"
-        },
-        {
-            "id": 161,
-            "gyrus": "Postcentral Gyrus",
-            "desc": "L area1/2/3(trunk region)",
-            "file": "region_161.ply"
-        },
-        {
-            "id": 162,
-            "gyrus": "Postcentral Gyrus",
-            "desc": "R area1/2/3(trunk region)",
-            "file": "region_162.ply"
-        },
-        {
             "id": 163,
             "gyrus": "Insular Gyrus",
             "desc": "L hypergranular insula",
@@ -55854,258 +55317,6 @@ exports.default = {
             "file": "region_188.ply"
         },
         {
-            "id": 189,
-            "gyrus": "MedioVentral Occipital Cortex",
-            "desc": "L caudal lingual gyrus",
-            "file": "region_189.ply"
-        },
-        {
-            "id": 190,
-            "gyrus": "MedioVentral Occipital Cortex",
-            "desc": "R caudal lingual gyrus",
-            "file": "region_190.ply"
-        },
-        {
-            "id": 191,
-            "gyrus": "MedioVentral Occipital Cortex",
-            "desc": "L rostral cuneus gyrus",
-            "file": "region_191.ply"
-        },
-        {
-            "id": 192,
-            "gyrus": "MedioVentral Occipital Cortex",
-            "desc": "R rostral cuneus gyrus",
-            "file": "region_192.ply"
-        },
-        {
-            "id": 193,
-            "gyrus": "MedioVentral Occipital Cortex",
-            "desc": "L caudal cuneus gyrus",
-            "file": "region_193.ply"
-        },
-        {
-            "id": 194,
-            "gyrus": "MedioVentral Occipital Cortex",
-            "desc": "R caudal cuneus gyrus",
-            "file": "region_194.ply"
-        },
-        {
-            "id": 195,
-            "gyrus": "MedioVentral Occipital Cortex",
-            "desc": "L rostral lingual gyrus",
-            "file": "region_195.ply"
-        },
-        {
-            "id": 196,
-            "gyrus": "MedioVentral Occipital Cortex",
-            "desc": "R rostral lingual gyrus",
-            "file": "region_196.ply"
-        },
-        {
-            "id": 197,
-            "gyrus": "MedioVentral Occipital Cortex",
-            "desc": "L ventromedial parietooccipital sulcus",
-            "file": "region_197.ply"
-        },
-        {
-            "id": 198,
-            "gyrus": "MedioVentral Occipital Cortex",
-            "desc": "R ventromedial parietooccipital sulcus",
-            "file": "region_198.ply"
-        },
-        {
-            "id": 199,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "L middle occipital gyrus",
-            "file": "region_199.ply"
-        },
-        {
-            "id": 200,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "R middle occipital gyrus",
-            "file": "region_200.ply"
-        },
-        {
-            "id": 201,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "L area V5/MT+",
-            "file": "region_201.ply"
-        },
-        {
-            "id": 202,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "R area V5/MT+",
-            "file": "region_202.ply"
-        },
-        {
-            "id": 203,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "L occipital polar cortex",
-            "file": "region_203.ply"
-        },
-        {
-            "id": 204,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "R occipital polar cortex",
-            "file": "region_204.ply"
-        },
-        {
-            "id": 205,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "L inferior occipital gyrus",
-            "file": "region_205.ply"
-        },
-        {
-            "id": 206,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "R inferior occipital gyrus",
-            "file": "region_206.ply"
-        },
-        {
-            "id": 207,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "L medial superior occipital gyrus",
-            "file": "region_207.ply"
-        },
-        {
-            "id": 208,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "R medial superior occipital gyrus",
-            "file": "region_208.ply"
-        },
-        {
-            "id": 209,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "L lateral superior occipital gyrus",
-            "file": "region_209.ply"
-        },
-        {
-            "id": 210,
-            "gyrus": "lateral Occipital Cortex",
-            "desc": "R lateral superior occipital gyrus",
-            "file": "region_210.ply"
-        },
-        {
-            "id": 211,
-            "gyrus": "Amygdala",
-            "desc": "L medial amygdala",
-            "file": "region_211.ply"
-        },
-        {
-            "id": 212,
-            "gyrus": "Amygdala",
-            "desc": "R medial amygdala",
-            "file": "region_212.ply"
-        },
-        {
-            "id": 213,
-            "gyrus": "Amygdala",
-            "desc": "L lateral amygdala",
-            "file": "region_213.ply"
-        },
-        {
-            "id": 214,
-            "gyrus": "Amygdala",
-            "desc": "R lateral amygdala",
-            "file": "region_214.ply"
-        },
-        {
-            "id": 215,
-            "gyrus": "Hippocampus",
-            "desc": "L rostral hippocampus",
-            "file": "region_215.ply"
-        },
-        {
-            "id": 216,
-            "gyrus": "Hippocampus",
-            "desc": "R rostral hippocampus",
-            "file": "region_216.ply"
-        },
-        {
-            "id": 217,
-            "gyrus": "Hippocampus",
-            "desc": "L caudal hippocampus",
-            "file": "region_217.ply"
-        },
-        {
-            "id": 218,
-            "gyrus": "Hippocampus",
-            "desc": "R caudal hippocampus",
-            "file": "region_218.ply"
-        },
-        {
-            "id": 219,
-            "gyrus": "Basal Ganglia",
-            "desc": "L ventral caudate",
-            "file": "region_219.ply"
-        },
-        {
-            "id": 220,
-            "gyrus": "Basal Ganglia",
-            "desc": "R ventral caudate",
-            "file": "region_220.ply"
-        },
-        {
-            "id": 221,
-            "gyrus": "Basal Ganglia",
-            "desc": "L globus pallidus",
-            "file": "region_221.ply"
-        },
-        {
-            "id": 222,
-            "gyrus": "Basal Ganglia",
-            "desc": "R globus pallidus",
-            "file": "region_222.ply"
-        },
-        {
-            "id": 223,
-            "gyrus": "Basal Ganglia",
-            "desc": "L nucleus accumbens",
-            "file": "region_223.ply"
-        },
-        {
-            "id": 224,
-            "gyrus": "Basal Ganglia",
-            "desc": "R nucleus accumbens",
-            "file": "region_224.ply"
-        },
-        {
-            "id": 225,
-            "gyrus": "Basal Ganglia",
-            "desc": "L ventromedial putamen",
-            "file": "region_225.ply"
-        },
-        {
-            "id": 226,
-            "gyrus": "Basal Ganglia",
-            "desc": "R ventromedial putamen",
-            "file": "region_226.ply"
-        },
-        {
-            "id": 227,
-            "gyrus": "Basal Ganglia",
-            "desc": "L dorsal caudate",
-            "file": "region_227.ply"
-        },
-        {
-            "id": 228,
-            "gyrus": "Basal Ganglia",
-            "desc": "R dorsal caudate",
-            "file": "region_228.ply"
-        },
-        {
-            "id": 229,
-            "gyrus": "Basal Ganglia",
-            "desc": "L dorsolateral putamen",
-            "file": "region_229.ply"
-        },
-        {
-            "id": 230,
-            "gyrus": "Basal Ganglia",
-            "desc": "R dorsolateral putamen",
-            "file": "region_230.ply"
-        },
-        {
             "id": 231,
             "gyrus": "Thalamus",
             "desc": "L medial pre-frontal thalamus",
@@ -56201,9 +55412,339 @@ exports.default = {
             "desc": "R lateral pre-frontal thalamus",
             "file": "region_246.ply"
         }
+    ],
+    regionURLs: [
+        new URL(require("5129ef0318a4ce70")),
+        new URL(require("ea3263ad8247c9ab")),
+        new URL(require("38cfa87246878e4a")),
+        new URL(require("aedaa5a4950dd27c")),
+        new URL(require("59276b9e59a06b42")),
+        new URL(require("aa57c1d33e624e92")),
+        new URL(require("445efddcccf48c27")),
+        new URL(require("aaa7865235112399")),
+        new URL(require("2d268bbd324fd155")),
+        new URL(require("10c9256de3496327")),
+        new URL(require("2649df5aa43a8ba8")),
+        new URL(require("f20de367b3a81c85")),
+        new URL(require("ea97fd2b866f5bbd")),
+        new URL(require("7304a59eb10f4256")),
+        new URL(require("1d60734eea2987c3")),
+        new URL(require("320a9fe657d39668")),
+        new URL(require("d6cd84b105b5f5ce")),
+        new URL(require("bd5d69985bc25948")),
+        new URL(require("8a357721e3f3c339")),
+        new URL(require("58db08346d76fe81")),
+        new URL(require("ffad8f217773bb6e")),
+        new URL(require("f22cdd2d933018d8")),
+        new URL(require("9a65d2c5e00d593f")),
+        new URL(require("ead91db7d2de747c")),
+        new URL(require("fc2d69adb442d0d2")),
+        new URL(require("e2048e5c017a34f6")),
+        new URL(require("14c08cca8541f13b")),
+        new URL(require("ea6d5e1d55c1f067")),
+        new URL(require("ccf29402526b099c")),
+        new URL(require("ae3970251ec0f993")),
+        new URL(require("289e56cbc6cda278")),
+        new URL(require("d89f36a645276974")),
+        new URL(require("29963a228897372c")),
+        new URL(require("85c6c44fdf38ee92")),
+        new URL(require("bfffe5df0c651ac9")),
+        new URL(require("3b5100a99b0cfec5")),
+        new URL(require("f507746ff954c9b7")),
+        new URL(require("503cb5e376e0865f")),
+        new URL(require("58d0cc63cffe743e")),
+        new URL(require("c4afe831a02ee877")),
+        new URL(require("dde692081a90f0e3")),
+        new URL(require("6aadb746c44b398b")),
+        new URL(require("9baec87adc351c94")),
+        new URL(require("3cd976716480f32a")),
+        new URL(require("e164795e9e72e1a3")),
+        new URL(require("5a68aa536247069")),
+        new URL(require("820f3f80564dc0cf")),
+        new URL(require("815e4a83e0b07260")),
+        new URL(require("99f9f3ac9a3699db")),
+        new URL(require("4d89326a0ff9079d")),
+        new URL(require("df584a9869a3d34e")),
+        new URL(require("e12d69925e004e2a")),
+        new URL(require("d1a2672f429df471")),
+        new URL(require("6986dfc79951c847")),
+        new URL(require("ba9dbdb6ff72bcf1")),
+        new URL(require("8d13657297e7d427")),
+        new URL(require("755037fb8a568cdc")),
+        new URL(require("12df0c8fb9bc9205")),
+        new URL(require("5ef01618e323a5ab")),
+        new URL(require("5919afde9570ff9a")),
+        new URL(require("2813c584860373f0")),
+        new URL(require("fb1d4b5fdc922ae9")),
+        new URL(require("d00c616ebf25c95a")),
+        new URL(require("1e0f04fbcbac3535")),
+        new URL(require("c1cd555aa653cca8")),
+        new URL(require("8b14ebe668a85988")),
+        new URL(require("7758f338317f01ae")),
+        new URL(require("58c396cc40edcd99")),
+        new URL(require("a90bcb9760178a81")),
+        new URL(require("3681d33e28cd594d")),
+        new URL(require("e0b128d0cee98b0e")),
+        new URL(require("2c3376d53e8d954b")),
+        new URL(require("76f6b02618dfadc8")),
+        new URL(require("9d1b24c6c547a8b9")),
+        new URL(require("b78440c5ab15f6b3")),
+        new URL(require("99d47c9c9817a996")),
+        new URL(require("466636cac29951fc")),
+        new URL(require("48f68dc3c5637c14")),
+        new URL(require("6dcb78ade87c46b8")),
+        new URL(require("287541df790e59cb")),
+        new URL(require("f28a5b547407644f")),
+        new URL(require("28fcd20ca42c4859"))
     ]
 };
 
-},{"@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}]},["iUuJv","fILKw"], "fILKw", "parcelRequire5a30", {}, "./", "/")
+},{"5129ef0318a4ce70":"lbdZC","ea3263ad8247c9ab":"9mpm4","38cfa87246878e4a":"7nYC0","aedaa5a4950dd27c":"gkw3V","59276b9e59a06b42":"fB8jl","aa57c1d33e624e92":"bamKw","445efddcccf48c27":"1bpR3","aaa7865235112399":"dq7Ki","2d268bbd324fd155":"8IgJf","10c9256de3496327":"496gX","2649df5aa43a8ba8":"ip0ra","f20de367b3a81c85":"70SRA","ea97fd2b866f5bbd":"l5dMx","7304a59eb10f4256":"61JnR","1d60734eea2987c3":"9sFzG","320a9fe657d39668":"03wfN","d6cd84b105b5f5ce":"5E1yP","bd5d69985bc25948":"6XPWK","8a357721e3f3c339":"48Uia","58db08346d76fe81":"9vE5X","ffad8f217773bb6e":"HTm0i","f22cdd2d933018d8":"hNltQ","9a65d2c5e00d593f":"eisai","ead91db7d2de747c":"hKQ5e","fc2d69adb442d0d2":"dLd6L","e2048e5c017a34f6":"7Er8P","14c08cca8541f13b":"cqWwP","ea6d5e1d55c1f067":"8qp3o","ccf29402526b099c":"8devc","ae3970251ec0f993":"4s3cl","289e56cbc6cda278":"9VF4p","d89f36a645276974":"esHfK","29963a228897372c":"1wKAg","85c6c44fdf38ee92":"vvjQC","bfffe5df0c651ac9":"bCTwm","3b5100a99b0cfec5":"820D6","f507746ff954c9b7":"dQzDI","503cb5e376e0865f":"3lBn2","58d0cc63cffe743e":"lTeex","c4afe831a02ee877":"11oFo","dde692081a90f0e3":"5Oo6s","6aadb746c44b398b":"2mq7v","9baec87adc351c94":"EDdIK","3cd976716480f32a":"bePqi","e164795e9e72e1a3":"aDtlq","5a68aa536247069":"a4xIX","820f3f80564dc0cf":"8fyAs","815e4a83e0b07260":"2rVPh","99f9f3ac9a3699db":"lFwaP","4d89326a0ff9079d":"hLPyf","df584a9869a3d34e":"fiPWQ","e12d69925e004e2a":"jJAW1","d1a2672f429df471":"2Y8MM","6986dfc79951c847":"aUQNM","ba9dbdb6ff72bcf1":"jhlJM","8d13657297e7d427":"dgtU0","755037fb8a568cdc":"femwg","12df0c8fb9bc9205":"kCZSl","5ef01618e323a5ab":"cn68M","5919afde9570ff9a":"k4D6V","2813c584860373f0":"5Xl9J","fb1d4b5fdc922ae9":"06uXE","d00c616ebf25c95a":"9UtWl","1e0f04fbcbac3535":"iJA7F","c1cd555aa653cca8":"92od4","8b14ebe668a85988":"5hZuK","7758f338317f01ae":"biSWn","58c396cc40edcd99":"f8f0J","a90bcb9760178a81":"76hOb","3681d33e28cd594d":"3INOP","e0b128d0cee98b0e":"3xurn","2c3376d53e8d954b":"jibb2","76f6b02618dfadc8":"ilW7s","9d1b24c6c547a8b9":"i0IOK","b78440c5ab15f6b3":"iRjfE","99d47c9c9817a996":"lMH9T","466636cac29951fc":"dVqrC","48f68dc3c5637c14":"l26Hf","6dcb78ade87c46b8":"QUpF6","287541df790e59cb":"7owQZ","f28a5b547407644f":"gYNXm","28fcd20ca42c4859":"9MJZw","@parcel/transformer-js/src/esmodule-helpers.js":"jnFvT"}],"lbdZC":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_001.33c9e594.ply") + "?" + Date.now();
+
+},{}],"9mpm4":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_002.19f03b52.ply") + "?" + Date.now();
+
+},{}],"7nYC0":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_003.325aa026.ply") + "?" + Date.now();
+
+},{}],"gkw3V":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_004.b59dd87a.ply") + "?" + Date.now();
+
+},{}],"fB8jl":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_005.13565894.ply") + "?" + Date.now();
+
+},{}],"bamKw":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_006.aa116c08.ply") + "?" + Date.now();
+
+},{}],"1bpR3":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_007.3c5982b6.ply") + "?" + Date.now();
+
+},{}],"dq7Ki":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_008.9eccd092.ply") + "?" + Date.now();
+
+},{}],"8IgJf":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_009.dc1ef0fd.ply") + "?" + Date.now();
+
+},{}],"496gX":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_010.2b36fea7.ply") + "?" + Date.now();
+
+},{}],"ip0ra":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_011.ae2f5d55.ply") + "?" + Date.now();
+
+},{}],"70SRA":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_012.7b362e61.ply") + "?" + Date.now();
+
+},{}],"l5dMx":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_013.d53c4c36.ply") + "?" + Date.now();
+
+},{}],"61JnR":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_014.15740f9e.ply") + "?" + Date.now();
+
+},{}],"9sFzG":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_015.897bf9c9.ply") + "?" + Date.now();
+
+},{}],"03wfN":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_016.133928f3.ply") + "?" + Date.now();
+
+},{}],"5E1yP":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_017.21d40e39.ply") + "?" + Date.now();
+
+},{}],"6XPWK":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_018.1770921b.ply") + "?" + Date.now();
+
+},{}],"48Uia":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_019.3461d04d.ply") + "?" + Date.now();
+
+},{}],"9vE5X":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_020.f133e023.ply") + "?" + Date.now();
+
+},{}],"HTm0i":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_021.d40a7c6f.ply") + "?" + Date.now();
+
+},{}],"hNltQ":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_022.cfe0ff47.ply") + "?" + Date.now();
+
+},{}],"eisai":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_023.4f7c70e6.ply") + "?" + Date.now();
+
+},{}],"hKQ5e":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_024.55d9ce10.ply") + "?" + Date.now();
+
+},{}],"dLd6L":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_025.9e57d94f.ply") + "?" + Date.now();
+
+},{}],"7Er8P":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_026.335f5e51.ply") + "?" + Date.now();
+
+},{}],"cqWwP":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_027.ac7cee0d.ply") + "?" + Date.now();
+
+},{}],"8qp3o":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_028.fb30289e.ply") + "?" + Date.now();
+
+},{}],"8devc":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_029.ec961507.ply") + "?" + Date.now();
+
+},{}],"4s3cl":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_030.e4005249.ply") + "?" + Date.now();
+
+},{}],"9VF4p":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_031.80f2f70d.ply") + "?" + Date.now();
+
+},{}],"esHfK":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_032.502ca7f7.ply") + "?" + Date.now();
+
+},{}],"1wKAg":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_033.e565e1f8.ply") + "?" + Date.now();
+
+},{}],"vvjQC":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_034.9426577d.ply") + "?" + Date.now();
+
+},{}],"bCTwm":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_035.d2278429.ply") + "?" + Date.now();
+
+},{}],"820D6":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_036.486d2ebc.ply") + "?" + Date.now();
+
+},{}],"dQzDI":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_037.113a0806.ply") + "?" + Date.now();
+
+},{}],"3lBn2":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_038.0b8a99af.ply") + "?" + Date.now();
+
+},{}],"lTeex":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_039.5243ecec.ply") + "?" + Date.now();
+
+},{}],"11oFo":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_040.58358469.ply") + "?" + Date.now();
+
+},{}],"5Oo6s":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_163.fb9e2fcc.ply") + "?" + Date.now();
+
+},{}],"2mq7v":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_164.644646c4.ply") + "?" + Date.now();
+
+},{}],"EDdIK":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_165.c9da01f4.ply") + "?" + Date.now();
+
+},{}],"bePqi":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_166.c968b8ea.ply") + "?" + Date.now();
+
+},{}],"aDtlq":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_167.00e60024.ply") + "?" + Date.now();
+
+},{}],"a4xIX":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_168.cdf835e6.ply") + "?" + Date.now();
+
+},{}],"8fyAs":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_169.f7d74045.ply") + "?" + Date.now();
+
+},{}],"2rVPh":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_170.52369881.ply") + "?" + Date.now();
+
+},{}],"lFwaP":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_171.59ce4039.ply") + "?" + Date.now();
+
+},{}],"hLPyf":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_172.239cbd9e.ply") + "?" + Date.now();
+
+},{}],"fiPWQ":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_173.f9bcb60e.ply") + "?" + Date.now();
+
+},{}],"jJAW1":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_174.cadbc6c6.ply") + "?" + Date.now();
+
+},{}],"2Y8MM":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_175.4a1446d8.ply") + "?" + Date.now();
+
+},{}],"aUQNM":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_176.1732aab5.ply") + "?" + Date.now();
+
+},{}],"jhlJM":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_177.b8810ef4.ply") + "?" + Date.now();
+
+},{}],"dgtU0":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_178.067ea4bd.ply") + "?" + Date.now();
+
+},{}],"femwg":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_179.7af3b3c5.ply") + "?" + Date.now();
+
+},{}],"kCZSl":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_180.744aaf9b.ply") + "?" + Date.now();
+
+},{}],"cn68M":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_181.dce1a331.ply") + "?" + Date.now();
+
+},{}],"k4D6V":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_182.a1a43ef3.ply") + "?" + Date.now();
+
+},{}],"5Xl9J":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_183.5e98ec3f.ply") + "?" + Date.now();
+
+},{}],"06uXE":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_184.4d1b23e5.ply") + "?" + Date.now();
+
+},{}],"9UtWl":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_185.64d1da6f.ply") + "?" + Date.now();
+
+},{}],"iJA7F":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_186.8f29e5ae.ply") + "?" + Date.now();
+
+},{}],"92od4":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_187.3caac5e0.ply") + "?" + Date.now();
+
+},{}],"5hZuK":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_188.1825737e.ply") + "?" + Date.now();
+
+},{}],"biSWn":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_231.c1d1f90c.ply") + "?" + Date.now();
+
+},{}],"f8f0J":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_232.05d962e2.ply") + "?" + Date.now();
+
+},{}],"76hOb":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_233.ce92de72.ply") + "?" + Date.now();
+
+},{}],"3INOP":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_234.d9339626.ply") + "?" + Date.now();
+
+},{}],"3xurn":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_235.6bc59434.ply") + "?" + Date.now();
+
+},{}],"jibb2":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_236.59e3ac5c.ply") + "?" + Date.now();
+
+},{}],"ilW7s":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_237.9a350724.ply") + "?" + Date.now();
+
+},{}],"i0IOK":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_238.d975cf60.ply") + "?" + Date.now();
+
+},{}],"iRjfE":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_239.21691d62.ply") + "?" + Date.now();
+
+},{}],"lMH9T":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_240.e70602a5.ply") + "?" + Date.now();
+
+},{}],"dVqrC":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_241.422cf212.ply") + "?" + Date.now();
+
+},{}],"l26Hf":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_242.e6fbcb44.ply") + "?" + Date.now();
+
+},{}],"QUpF6":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_243.b24cb177.ply") + "?" + Date.now();
+
+},{}],"7owQZ":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_244.ffc33ca6.ply") + "?" + Date.now();
+
+},{}],"gYNXm":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_245.3d308857.ply") + "?" + Date.now();
+
+},{}],"9MJZw":[function(require,module,exports,__globalThis) {
+module.exports = module.bundle.resolve("region_246.d3368e93.ply") + "?" + Date.now();
+
+},{}]},["iUuJv","fILKw"], "fILKw", "parcelRequire5a30", {}, "./", "/")
 
 //# sourceMappingURL=roi-viz.1fcc916e.js.map
