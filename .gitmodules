@@ -1,0 +1,3 @@
+[submodule "webpages/roi-viz/src/assets/private"]
+	path = webpages/roi-viz/src/assets/private
+	url = https://github.com/ab126/fMRIViz-PrivateFiles.git
