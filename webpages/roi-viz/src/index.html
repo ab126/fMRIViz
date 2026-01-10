@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Brain ROI Viewer</title>
+  <link rel="stylesheet" href="./style.css">
+</head>
+<body>
+
+  <!-- UI -->
+  <div id="ui">
+    <label for="datasetSelect"><b>Dataset</b></label><br />
+    <select id="datasetSelect">
+      <option value="datasets/mni">MNI (19 ROIs)</option>
+      <!--
+      <option value="datasets/nsd_subj01">Subject 01</option>
+      -->
+    </select>
+  </div>
+
+  <div id="tooltip"></div>
+
+  <!-- Click-selected region info -->
+  <div id="region-panel">
+    <small>Click an anatomical region</small>
+  </div>
+
+  <canvas id="c"></canvas>
+
+  <script src="./config/config.base.js"></script>
+  <script src="./config/config.public.js"></script>
+
+  <!-- Private extensions -->
+  <script src="./config/config.private.js"></script>
+
+  <script type="module" src="./main.js"></script>
+  <footer id="atlas-footer">
+    Anatomical atlases used: Brainnetome, Brainstem Navigator, Diedrichsen 2009.
+    <a href="#atlas-attributions">Attributions & Licenses</a>
+  </footer>
+  
+  <!-- Atlas Attributions Modal -->
+  <section
+    id="atlas-attributions"
+    class="modal"
+    role="dialog"
+    aria-labelledby="atlas-attributions-title"
+    aria-hidden="true"
+  >
+    <div class="modal-content">
+
+      <button class="modal-close" aria-label="Close attributions">
+        ×
+      </button>
+
+      <h2 id="atlas-attributions-title">
+        Data Sources, Citations & Licensing
+      </h2>
+
+      <p class="modal-intro">
+        This viewer uses anatomical atlases distributed under separate licenses.
+        Please cite the original sources when using data derived from this tool.
+      </p>
+
+      <hr />
+
+      <!-- Brainnetome -->
+      <section class="atlas-entry">
+        <h3>Brainnetome Atlas</h3>
+        <p>
+          Fan L. et al. (2016).<br />
+          <i>The Human Brainnetome Atlas: A New Brain Atlas Based on Connectional Architecture.</i><br />
+          <b>Cerebral Cortex</b>.
+        </p>
+        <p>
+          License: <b>CC BY-NC 4.0</b> (Non-commercial use only)
+        </p>
+        <p>
+          <a href="https://doi.org/10.1093/cercor/bhw157" target="_blank" rel="noopener">
+            DOI: 10.1093/cercor/bhw157
+          </a>
+        </p>
+      </section>
+
+      <hr />
+
+      <!-- Diedrichsen -->
+      <section class="atlas-entry">
+        <h3>Diedrichsen Cerebellar Atlas</h3>
+        <p>
+          Diedrichsen J. et al. (2009).<br />
+          <i>A Probabilistic MR Atlas of the Human Cerebellum.</i><br />
+          <b>NeuroImage</b>.
+        </p>
+        <p>
+          License: <b>CC BY 4.0</b>
+        </p>
+        <p>
+          <a href="https://doi.org/10.1016/j.neuroimage.2009.01.045" target="_blank" rel="noopener">
+            DOI: 10.1016/j.neuroimage.2009.01.045
+          </a>
+        </p>
+      </section>
+
+      <hr />
+
+      <!-- Brainstem Navigator -->
+      <section class="atlas-entry">
+        <h3>Brainstem Navigator</h3>
+        <p>
+          Ezra M. et al. (2015).<br />
+          <i>Connectivity-based segmentation of the human brainstem.</i><br />
+          <b>NeuroImage</b>.
+        </p>
+        <p>
+          <b>Redistribution restricted.</b><br />
+          Derived data from Brainstem Navigator is not included in public
+          distributions of this viewer. Users must obtain the atlas separately
+          under its original license.
+        </p>
+        <p>
+          <a href="https://dx.doi.org/10.25790/bml0cm.96" target="_blank" rel="noopener">
+            DOI: 10.25790/bml0cm.96
+          </a>
+        </p>
+      </section>
+
+      <hr />
+
+      <p class="modal-disclaimer">
+        This tool is intended for research and educational use only.
+      </p>
+
+    </div>
+  </section>
+
+
+</body>
+
+
+
+</html>
