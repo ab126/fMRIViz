@@ -1,19 +1,15 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
-import metaData from './assets/public/mni/metaData.js'
-import cortexMetaData from './assets/public/mni/brainnetome/19roiAtlasMetaData.js'
-import brainstemMetaData from './assets/private/mni/brainstemnavigator/pagMetaData.js'
-import cerebellumMetaData from './assets/public/mni/diedrichsen2009/cerebellumMetaData.js'
+import metaData from './assets/public/mni/brain19roiMeta.js'
 
-import "./utils/brainnetome.js";
-import "./utils/brainstemnavigator.js";
-import "./utils/diedrichsen2009.js";
-import { atlasRegistry } from "./utils/atlasRegistry.js";
+import "./assets/public/mni/brainnetome.js";
+import "./assets/private/mni/brainstemnavigator.js";
+import "./assets/public/mni/diedrichsen2009.js";
+import { atlasRegistry } from "./assets/atlasRegistry.js";
 
 // After all atlases tried to register:
 console.log("Available atlases:", atlasRegistry);
-
 
 /* ------------------------------------------------------------------
    BASIC THREE SETUP
@@ -285,30 +281,27 @@ function clearRegionPanel() {
   panel.innerHTML = "<small>Click an anatomical region</small>";
 }
 
-// Load Functions //TODO: select from the path here
-async function loadDataset(datasetRoot) {
+// Load Functions 
+async function loadDataset() {
   // Clear scene
   clearScene();
 
-  // Load metadata
+  // Load brain template 
   loadBrain(metaData.brainURL);
   
+  // Add 19 ROIs
   metaData.roiURLs.forEach((roiPath, i) => {
     loadROI(roiPath, i, metaData.roiURLs.length);
   });
-
   loadROILabels(metaData.roiLabelsURL);
 
+  // Add atlases
   let atlasROIcount = 0;
+  atlasRegistry.forEach( atlas => {
+    loadAtlas(atlas, atlas.label, atlas.colorProp, atlasROIcount);
+    atlasROIcount += atlas.regionsMeta.length;
+  });
 
-  loadAtlas(cortexMetaData, "Brainnetome", "gyrus", atlasROIcount);
-  atlasROIcount += cortexMetaData.regionsMeta.length;
-
-  loadAtlas(brainstemMetaData, "Brainstem Navigator", "region", atlasROIcount);
-  atlasROIcount += brainstemMetaData.regionsMeta.length;
-  
-  loadAtlas(cerebellumMetaData, "Deidrichsen 2009", "region", atlasROIcount);
-  atlasROIcount += cerebellumMetaData.regionsMeta.length;
 }
 
 async function loadBrain(brainURL) {
@@ -367,9 +360,9 @@ async function loadAtlas(atlasMetaData, atlasName = null, colorProp = "id", star
 
   atlasMetaData.regionsMeta.forEach( (region, i) => {  
     
-    //const region = regionsMetaData.regionsMeta[i];
     const id = region.id;
-    const regionURL = atlasMetaData.regionURLs[id - 1];
+    const regionURL = atlasMetaData.regionURLs[id - 1]; // Select from all URLs
+
 
     // Update color property info
     if (!colorProps.includes(region[colorProp])) {
