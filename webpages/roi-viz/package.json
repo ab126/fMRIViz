@@ -6,6 +6,7 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "parcel src/index.html",
+    "rm-hist": "rd -r -Path .parcel-cache dist",
     "build": "parcel build src/index.html --public-url ./"
   },
   "keywords": [],

@@ -4,7 +4,13 @@
   "description": "A visualization end for models on functional magenetic resonance imaging (fMRI) modality",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "deploy": "gh-pages -d dist"
+    "cd-viz": "cd webpages/roi-viz",
+    "cd-private": "cd webpages/roi-viz/src/assets/private",
+    "dev": "npm --prefix webpages/roi-viz run dev",
+    "rm-hist": "rd -rf webpages/roi-viz/.parcel-cache webpages/roi-viz/dist",
+    "build": "npm --prefix webpages/roi-viz run build",
+    "deploy": "npm run build && gh-pages -d webpages/roi-viz/dist",
+    "push-submodule": "cd webpages/roi-viz/src/assets/private && git add . && git commit -m 'update private assets' && git push && cd ../../../../.."
   },
   "keywords": [],
   "author": "",
