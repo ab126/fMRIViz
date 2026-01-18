@@ -3,10 +3,11 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import metaData from './assets/public/mni/brain19roiMeta.js'
 
+import { atlasRegistry } from "./assets/atlasRegistry.js";
 import "./assets/public/mni/brainnetome.js";
 import "./assets/private/mni/brainstemnavigator.js";
 import "./assets/public/mni/diedrichsen2009.js";
-import { atlasRegistry } from "./assets/atlasRegistry.js";
+
 
 // After all atlases tried to register:
 console.log("Available atlases:", atlasRegistry);

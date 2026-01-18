@@ -6,8 +6,9 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "dev": "parcel src/index.html",
-    "rm-hist": "rd -r -Path .parcel-cache dist",
-    "build": "parcel build src/index.html --public-url ./"
+    "rm-hist": "powershell Remove-Item -Recurse -Force '.parcel-cache', 'dist'",
+    "build": "parcel build src/index.html --public-url ./",
+    "clean-build": "npm run rm-hist && npm run build"
   },
   "keywords": [],
   "author": "",
