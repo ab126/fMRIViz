@@ -5,14 +5,14 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "cd-viz": "cd webpages/roi-viz",
-    "cd-private": "cd webpages/roi-viz/src/assets/private",
+    "cd-private": "powershell cd webpages/roi-viz/src/assets/private",
     "dev": "npm --prefix webpages/roi-viz run dev",
     "rm-hist": "npm --prefix webpages/roi-viz run rm-hist",
     "build": "npm --prefix webpages/roi-viz run build",
     "clean-build": "npm --prefix webpages/roi-viz run clean-build",
     "deploy": "gh-pages -d webpages/roi-viz/dist",
     "clean-deploy": "npm run clean-build && npm run deploy",
-    "push-private": "powershell cd webpages/roi-viz/src/assets/private && git add . && git commit -m 'update private assets' && git push && cd ../../../../.."
+    "push-private": "git -C webpages/roi-viz/src/assets/private add . && git -C webpages/roi-viz/src/assets/private commit -m \"update private assets\" && git -C webpages/roi-viz/src/assets/private push"
   },
   "keywords": [],
   "author": "",

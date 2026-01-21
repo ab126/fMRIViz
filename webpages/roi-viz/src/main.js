@@ -3,14 +3,23 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import metaData from './assets/public/mni/brain19roiMeta.js'
 
-import { atlasRegistry } from "./assets/atlasRegistry.js";
+import { atlasRegistry, clearAtlasRegistry  } from "./assets/atlasRegistry.js";
+import { PUBLIC_DATASETS } from "./assets/public/publicDatasetsRegistry.js";
+import { PRIVATE_DATASETS } from "./assets/private/privateDatasetRegistry.js";
+
+// --- STATIC IMPORTS (Parcel MUST see these) ---
 import "./assets/public/mni/brainnetome.js";
-import "./assets/private/mni/brainstemnavigator.js";
 import "./assets/public/mni/diedrichsen2009.js";
+import "./assets/private/mni/brainstemnavigator.js";
 
+import "./assets/private/nsd_subj01/brainnetome.js";
+//import "./assets/private/nsd_subj01/diedrichsen2009.js";
+import "./assets/private/nsd_subj01/brainstemnavigator.js";
 
-// After all atlases tried to register:
-console.log("Available atlases:", atlasRegistry);
+const DATASETS = mergeDatasets(PUBLIC_DATASETS, PRIVATE_DATASETS);
+
+console.log("Available datasets:", Object.keys(DATASETS));
+
 
 /* ------------------------------------------------------------------
    BASIC THREE SETUP
@@ -93,6 +102,7 @@ const atlasRegionMaterial = new THREE.MeshStandardMaterial({
   depthWrite: true
 })
 
+// Dataset Selection
 const select = document.getElementById("datasetSelect")
 select.addEventListener("change", e => {
   loadDataset(e.target.value);
@@ -282,26 +292,70 @@ function clearRegionPanel() {
   panel.innerHTML = "<small>Click an anatomical region</small>";
 }
 
+// Merge public and private datasets
+function mergeDatasets(publicDatasets, privateDatasets) {
+  const merged = { ...publicDatasets };
+  
+  for (const [key, privateLoader] of Object.entries(privateDatasets)) {
+    if (merged[key]) {
+      // Merge if key exists in both
+      const publicLoader = merged[key];
+      merged[key] = async () => {
+        const publicData = await publicLoader();
+        const privateData = await privateLoader();
+        
+        return {
+          meta: privateData.meta ?? publicData.meta,
+          atlases: [...(publicData.atlases ?? []), ...(privateData.atlases ?? [])],
+        };
+      };
+    } else {
+      // Add if key only exists in private
+      merged[key] = privateLoader;
+    }
+  }
+  
+  return merged;
+}
+
 // Load Functions 
-async function loadDataset() {
+async function loadDataset(datasetKey) {
   // Clear scene
   clearScene();
+  clearRegionPanel();
+
+  atlasGroup.clear();
+  roiGroup.clear();
+  
+  // Clear previous atlas registrations
+  // clearAtlasRegistry();
+
+  const entry = DATASETS[datasetKey];
+  if (!entry) {
+    console.error("Unknown dataset:", datasetKey);
+    return;
+  }  
+
+  const { meta, atlases } = await entry();
+  console.log("Loading dataset:", datasetKey, meta, atlases);
 
   // Load brain template 
-  loadBrain(metaData.brainURL);
+  loadBrain(meta.brainURL);
   
   // Add 19 ROIs
-  metaData.roiURLs.forEach((roiPath, i) => {
+  meta.roiURLs.forEach((roiPath, i) => {
     loadROI(roiPath, i, metaData.roiURLs.length);
   });
-  loadROILabels(metaData.roiLabelsURL);
+  loadROILabels(meta.roiLabelsURL);
 
   // Add atlases
   let atlasROIcount = 0;
-  atlasRegistry.forEach( atlas => {
-    loadAtlas(atlas, atlas.label, atlas.colorProp, atlasROIcount);
-    atlasROIcount += atlas.regionsMeta.length;
-  });
+  atlasRegistry
+    .filter(a => atlases.includes(a.id))
+    .forEach(atlas => {
+      loadAtlas(atlas, atlas.label, atlas.colorProp, atlasROIcount);
+      atlasROIcount += atlas.regionsMeta.length;
+    });
 
 }
 
@@ -384,6 +438,7 @@ async function loadAtlas(atlasMetaData, atlasName = null, colorProp = "id", star
         mesh.renderOrder = 1;
 
         atlasGroup.add(mesh);
+        loadedObjects.push(mesh);
 
         loadedCount++;
         if (loadedCount === total) {
@@ -392,6 +447,8 @@ async function loadAtlas(atlasMetaData, atlasName = null, colorProp = "id", star
         }
       }      
     );
+
+    
   })
 }
 

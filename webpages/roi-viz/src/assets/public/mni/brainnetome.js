@@ -1,7 +1,7 @@
 import { registerAtlas } from "../../atlasRegistry.js";
 
 registerAtlas({
-  id: "brainnetome",
+  id: "mni/brainnetome",
   label: "Brainnetome",
   colorProp: "gyrus",
   path: "./brainnetome/",

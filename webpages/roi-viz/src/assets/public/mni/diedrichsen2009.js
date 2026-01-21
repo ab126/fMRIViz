@@ -1,7 +1,7 @@
 import { registerAtlas } from "../../atlasRegistry.js";
 
 registerAtlas({
-  id: "diedrichsen2009",
+  id: "mni/diedrichsen2009",
   label: "Diedrichsen 2009 Cerebellum",
   colorProp: "region",
   path: "./diedrichsen2009/",
