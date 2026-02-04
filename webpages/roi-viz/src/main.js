@@ -6,7 +6,7 @@ import metaData from './assets/public/mni/brain19roiMeta.js'
 
 import { atlasRegistry, clearAtlasRegistry  } from "./assets/atlasRegistry.js";
 import { PUBLIC_DATASETS } from "./assets/public/publicDatasetsRegistry.js";
-import { PRIVATE_DATASETS } from "./assets/private/privateDatasetRegistry.js";
+//import { PRIVATE_DATASETS } from "./assets/private/privateDatasetRegistry.js";
 
 // --- STATIC IMPORTS (Parcel MUST see these) ---
 import "./assets/public/mni/brainnetome.js";
@@ -16,6 +16,9 @@ import "./assets/private/mni/brainstemnavigator.js";
 import "./assets/private/nsd_subj01/brainnetome.js";
 //import "./assets/private/nsd_subj01/diedrichsen2009.js";
 import "./assets/private/nsd_subj01/brainstemnavigator.js";
+
+// TODO: Add other ROI atlases
+let PRIVATE_DATASETS, DATASETS = {};
 
 function mergeDatasets(publicDatasets, privateDatasets) {
   const merged = { ...publicDatasets };
@@ -42,11 +45,20 @@ function mergeDatasets(publicDatasets, privateDatasets) {
   return merged;
 }
 
-const DATASETS = mergeDatasets(PUBLIC_DATASETS, PRIVATE_DATASETS);
-
-console.log("Available datasets:", Object.keys(DATASETS));
-
-// TODO: Add other ROI atlases
+(async () => {
+  if (window.FMRIVIZ_CONFIG?.showRestricted === true) {
+    // dynamic import – Parcel usually won't bundle these unless forced
+    const module = await import("./assets/private/privateDatasetRegistry.js");
+    PRIVATE_DATASETS = module.PRIVATE_DATASETS;
+    console.log("Private datasets loaded");
+  }
+  
+  DATASETS = mergeDatasets(PUBLIC_DATASETS, PRIVATE_DATASETS);
+  console.log("Available datasets:", Object.keys(DATASETS));
+  
+  // initial load – must happen after DATASETS is ready
+  loadDataset(select.value);
+})();
 
 /* ------------------------------------------------------------------
    BASIC THREE SETUP
@@ -149,9 +161,6 @@ const select = document.getElementById("datasetSelect")
 select.addEventListener("change", e => {
   loadDataset(e.target.value);
 });
-
-// initial load
-loadDataset(select.value);
 
 // ────────────────────────────────────────────────
 // Visibility toggles
@@ -393,6 +402,7 @@ function clearScene() {
   brainGroup.clear();
   atlasGroup.clear();
   roiGroup.clear();
+  labelGroup.clear();
 }
 
 function clearRegionPanel() {
@@ -771,7 +781,14 @@ function animate() {
 animate();
 
 window.addEventListener("resize", () => {
+  // Camera
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
+
+  // Main WebGL renderer
   renderer.setSize(window.innerWidth, window.innerHeight);
+
+  // Resize the CSS2D label renderer ───
+  labelRenderer.setSize(window.innerWidth, window.innerHeight);
+
 });
