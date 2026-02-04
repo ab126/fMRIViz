@@ -1,6 +1,7 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
+import { CSS2DRenderer, CSS2DObject } from 'three/examples/jsm/renderers/CSS2DRenderer.js';
 import metaData from './assets/public/mni/brain19roiMeta.js'
 
 import { atlasRegistry, clearAtlasRegistry  } from "./assets/atlasRegistry.js";
@@ -16,10 +17,36 @@ import "./assets/private/nsd_subj01/brainnetome.js";
 //import "./assets/private/nsd_subj01/diedrichsen2009.js";
 import "./assets/private/nsd_subj01/brainstemnavigator.js";
 
+function mergeDatasets(publicDatasets, privateDatasets) {
+  const merged = { ...publicDatasets };
+  
+  for (const [key, privateLoader] of Object.entries(privateDatasets)) {
+    if (merged[key]) {
+      // Merge if key exists in both
+      const publicLoader = merged[key];
+      merged[key] = async () => {
+        const publicData = await publicLoader();
+        const privateData = await privateLoader();
+        
+        return {
+          meta: privateData.meta ?? publicData.meta,
+          atlases: [...(publicData.atlases ?? []), ...(privateData.atlases ?? [])],
+        };
+      };
+    } else {
+      // Add if key only exists in private
+      merged[key] = privateLoader;
+    }
+  }
+  
+  return merged;
+}
+
 const DATASETS = mergeDatasets(PUBLIC_DATASETS, PRIVATE_DATASETS);
 
 console.log("Available datasets:", Object.keys(DATASETS));
 
+// TODO: Add other ROI atlases
 
 /* ------------------------------------------------------------------
    BASIC THREE SETUP
@@ -57,16 +84,31 @@ scene.add(light);
 
 scene.add(new THREE.AxesHelper(100));
 
+const labelRenderer = new CSS2DRenderer();
+labelRenderer.setSize(window.innerWidth, window.innerHeight);
+labelRenderer.domElement.style.position = 'absolute';
+labelRenderer.domElement.style.top = '0';
+labelRenderer.domElement.style.pointerEvents = 'none';     // let mouse go through to canvas
+document.body.appendChild(labelRenderer.domElement);
+
+// Make sure it renders on top of WebGL
+labelRenderer.domElement.style.zIndex = '2';               // adjust if needed
+
 /* ------------------------------------------------------------------
    LOADERS & MATERIALS
 ------------------------------------------------------------------ */
 
 const loader = new PLYLoader();
 const loadedObjects = [];
+let brainMesh = null;
+const brainGroup = new THREE.Group();
+scene.add(brainGroup);
 const atlasGroup = new THREE.Group();
 scene.add(atlasGroup);
 const roiGroup = new THREE.Group();
 scene.add(roiGroup);
+const labelGroup = new THREE.Group();  
+scene.add(labelGroup);
 
 const brainMaterial = new THREE.MeshStandardMaterial({
   color: 0xe0e0e0,
@@ -111,6 +153,55 @@ select.addEventListener("change", e => {
 // initial load
 loadDataset(select.value);
 
+// ────────────────────────────────────────────────
+// Visibility toggles
+// ────────────────────────────────────────────────
+const toggleBrain   = document.getElementById('toggle-brain');
+const toggleROIs    = document.getElementById('toggle-rois');
+const toggleAtlases = document.getElementById('toggle-atlases');
+
+// Global state – whether atlas raycasting & panel are active
+let atlasInteractionEnabled = toggleAtlases.checked;  
+
+const regionPanel = document.getElementById('region-panel');
+
+// Update visibility
+function updateVisibilityAndInteraction() {
+  const showBrain   = toggleBrain.checked;
+  const showROIs    = toggleROIs.checked;
+  const showAtlases = toggleAtlases.checked;
+
+  // ─── Visual visibility ───────────────────────────────
+  if (brainMesh) {
+    brainMesh.visible = showBrain;
+  }
+  roiGroup.visible = showROIs;
+  labelGroup.visible = showROIs;
+  atlasGroup.visible = showAtlases;
+
+  // ─── Interaction & panel logic ───────────────────────
+  atlasInteractionEnabled = showAtlases;
+
+  if (!showAtlases) {
+    // Hide / clear panel when atlases are off
+    regionPanel.style.display = 'none';
+    // Optional: clear content so it doesn't show stale data if re-enabled
+    // regionPanel.innerHTML = '<small>Click an anatomical region</small>';
+  } else {
+    regionPanel.style.display = 'block';
+    // You may want to re-show last hovered/selected info here if desired
+  }
+}
+
+// Attach listeners
+[toggleBrain, toggleROIs, toggleAtlases].forEach(toggle => {
+  toggle.addEventListener('change', updateVisibilityAndInteraction);
+});
+
+// Call once after first load
+setTimeout(updateVisibilityAndInteraction, 500); // small delay to let objects load
+
+
 /* ------------------------------------------------------------------
    RAY CASTING / HOVERING / INTERACTING
 ------------------------------------------------------------------ */
@@ -123,6 +214,17 @@ let hoveredMesh = null;
 
 // Hover
 renderer.domElement.addEventListener("mousemove", (event) => {
+  // Skip everything if atlases are turned off
+  if (!atlasInteractionEnabled) {
+    if (hoveredMesh) {
+      // Clean up any leftover hover state
+      hoveredMesh.material.emissive?.copy(hoveredMesh.userData.baseEmissive);
+      hoveredMesh = null;
+    }
+    tooltip.style.display = "none";
+    return;
+  }
+  
   const hits = getIntersections(event, atlasGroup.children);
 
   if (hits.length > 0) {
@@ -168,6 +270,8 @@ renderer.domElement.addEventListener("mousemove", (event) => {
 let selectedMesh = null;
 
 renderer.domElement.addEventListener("click", (event) => {
+  if (!atlasInteractionEnabled) return;
+  
   const hits = getIntersections(event, atlasGroup.children);
 
   if (!hits.length) return;
@@ -285,6 +389,10 @@ function clearScene() {
     if (obj.material) obj.material.dispose();
   }
   loadedObjects.length = 0;
+
+  brainGroup.clear();
+  atlasGroup.clear();
+  roiGroup.clear();
 }
 
 function clearRegionPanel() {
@@ -292,40 +400,11 @@ function clearRegionPanel() {
   panel.innerHTML = "<small>Click an anatomical region</small>";
 }
 
-// Merge public and private datasets
-function mergeDatasets(publicDatasets, privateDatasets) {
-  const merged = { ...publicDatasets };
-  
-  for (const [key, privateLoader] of Object.entries(privateDatasets)) {
-    if (merged[key]) {
-      // Merge if key exists in both
-      const publicLoader = merged[key];
-      merged[key] = async () => {
-        const publicData = await publicLoader();
-        const privateData = await privateLoader();
-        
-        return {
-          meta: privateData.meta ?? publicData.meta,
-          atlases: [...(publicData.atlases ?? []), ...(privateData.atlases ?? [])],
-        };
-      };
-    } else {
-      // Add if key only exists in private
-      merged[key] = privateLoader;
-    }
-  }
-  
-  return merged;
-}
-
 // Load Functions 
 async function loadDataset(datasetKey) {
   // Clear scene
   clearScene();
   clearRegionPanel();
-
-  atlasGroup.clear();
-  roiGroup.clear();
   
   // Clear previous atlas registrations
   // clearAtlasRegistry();
@@ -346,7 +425,7 @@ async function loadDataset(datasetKey) {
   meta.roiURLs.forEach((roiPath, i) => {
     loadROI(roiPath, i, metaData.roiURLs.length);
   });
-  loadROILabels(meta.roiLabelsURL);
+  //loadROILabels(meta.roiLabelsURL);
 
   // Add atlases
   let atlasROIcount = 0;
@@ -365,10 +444,11 @@ async function loadBrain(brainURL) {
     brainURL,
     geometry => {
       geometry.computeVertexNormals();
-      const brain = new THREE.Mesh(geometry, brainMaterial);
-      brain.name = "brain";
-      scene.add(brain);
-      loadedObjects.push(brain);
+      brainMesh = new THREE.Mesh(geometry, brainMaterial);
+      brainMesh.name = "brain";
+      brainMesh.userData.isBrain = true; // Mark as brain
+      brainGroup.add(brainMesh);
+      loadedObjects.push(brainMesh);      
       //brain.renderOrder = 1;
     }
   );
@@ -387,11 +467,25 @@ async function loadROI(roiURL, index, total) {
       roi.material.color.copy(
         hslQualitativeColor((index) / (total - 1)) // twilightNonCyclic rainbowColormap hslQualitativeColor
       );
-      roi.name = `ROI_${String(index).padStart(2, '0')}`;
+      roi.name = `ROI_${String(index+1).padStart(2, '0')}`;
       roi.renderOrder = 0;
       
       roiGroup.add(roi);
       loadedObjects.push(roi);
+
+      // Labels
+      const center = roi.geometry.boundingSphere?.center?.clone() || roi.position.clone();
+      center.applyMatrix4(roi.matrixWorld);   // if mesh is transformed
+
+      const label = createROILabel(
+        String(index+1),
+        center,
+        '#000000',
+        'rgba(240, 240, 255, 0.01)'   // light bg for readability
+      );
+
+      labelGroup.add(label);
+      
     }
   );
 }
@@ -405,6 +499,31 @@ async function loadROILabels(roiLabelsURL){
     loadedObjects.push(labelsMesh);
     labelsMesh.renderOrder = 0;
   });
+}
+
+function createROILabel(text, worldPosition, color = '#000', bg = 'rgba(255,255,255,0.75)') {
+  const div = document.createElement('div');
+  div.className = 'roi-label';
+  div.textContent = text;
+  div.style.color = color;
+  div.style.background = bg;
+  div.style.padding = '4px 8px';
+  div.style.borderRadius = '6px';
+  div.style.fontSize = '13px';
+  div.style.fontWeight = '500';
+  div.style.whiteSpace = 'nowrap';
+  div.style.pointerEvents = 'none';
+  div.style.userSelect = 'none';
+  // Optional: text shadow for better contrast on bright/dark backgrounds
+  div.style.textShadow = '0 0 3px rgba(0,0,0,0.8), 1px 1px 2px #000';
+
+  const label = new CSS2DObject(div);
+  label.position.copy(worldPosition);
+
+  // Optional: slight offset so label doesn't clip into mesh
+  label.position.add(new THREE.Vector3(0, 0, 8));   // move up in brain space
+
+  return label;
 }
 
 async function loadAtlas(atlasMetaData, atlasName = null, colorProp = "id", startIndex = 0) { 
@@ -647,6 +766,7 @@ function animate() {
   requestAnimationFrame(animate);
   controls.update();
   renderer.render(scene, camera);
+  labelRenderer.render(scene, camera);
 }
 animate();
 
