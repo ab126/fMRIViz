@@ -46,7 +46,7 @@ function mergeDatasets(publicDatasets, privateDatasets) {
 }
 
 (async () => {
-  if (window.FMRIVIZ_CONFIG?.showRestricted === true) {
+  if (window.FMRIVIZ_CONFIG?.showRestricted === true && process.env.NODE_ENV !== 'production') {
     // dynamic import – Parcel usually won't bundle these unless forced
     const module = await import("./assets/private/privateDatasetRegistry.js");
     PRIVATE_DATASETS = module.PRIVATE_DATASETS;
