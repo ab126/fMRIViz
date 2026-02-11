@@ -20,9 +20,17 @@ import "./assets/private/nsd_subj01/brainstemnavigator.js";
 // TODO: Add other ROI atlases
 let PRIVATE_DATASETS, DATASETS = {};
 
-function mergeDatasets(publicDatasets, privateDatasets) {
+function mergeDatasets(publicDatasets = {}, privateDatasets = {}) {
+  // If one side is missing or an empty object, return the other side
+  const publicEmpty = !publicDatasets || Object.keys(publicDatasets).length === 0;
+  const privateEmpty = !privateDatasets || Object.keys(privateDatasets).length === 0;
+
+  if (publicEmpty && privateEmpty) return {};
+  if (publicEmpty) return { ...privateDatasets };
+  if (privateEmpty) return { ...publicDatasets };
+
   const merged = { ...publicDatasets };
-  
+
   for (const [key, privateLoader] of Object.entries(privateDatasets)) {
     if (merged[key]) {
       // Merge if key exists in both
@@ -30,7 +38,7 @@ function mergeDatasets(publicDatasets, privateDatasets) {
       merged[key] = async () => {
         const publicData = await publicLoader();
         const privateData = await privateLoader();
-        
+
         return {
           meta: privateData.meta ?? publicData.meta,
           atlases: [...(publicData.atlases ?? []), ...(privateData.atlases ?? [])],
@@ -41,24 +49,9 @@ function mergeDatasets(publicDatasets, privateDatasets) {
       merged[key] = privateLoader;
     }
   }
-  
+
   return merged;
 }
-
-(async () => {
-  if (window.FMRIVIZ_CONFIG?.showRestricted === true && process.env.NODE_ENV !== 'production') {
-    // dynamic import – Parcel usually won't bundle these unless forced
-    const module = await import("./assets/private/privateDatasetRegistry.js");
-    PRIVATE_DATASETS = module.PRIVATE_DATASETS;
-    console.log("Private datasets loaded");
-  }
-  
-  DATASETS = mergeDatasets(PUBLIC_DATASETS, PRIVATE_DATASETS);
-  console.log("Available datasets:", Object.keys(DATASETS));
-  
-  // initial load – must happen after DATASETS is ready
-  loadDataset(select.value);
-})();
 
 /* ------------------------------------------------------------------
    BASIC THREE SETUP
@@ -154,13 +147,30 @@ const atlasRegionMaterial = new THREE.MeshStandardMaterial({
   opacity: 0.35,
   emissive: new THREE.Color(0x000000),
   depthWrite: true
-})
+});
+
+
 
 // Dataset Selection
 const select = document.getElementById("datasetSelect")
 select.addEventListener("change", e => {
   loadDataset(e.target.value);
 });
+
+(async () => {
+  if (window.FMRIVIZ_CONFIG?.showRestricted === true && process.env.NODE_ENV !== 'production') {
+    // dynamic import – Parcel usually won't bundle these unless forced
+    const module = await import("./assets/private/privateDatasetRegistry.js");
+    PRIVATE_DATASETS = module.PRIVATE_DATASETS;
+    console.log("Private datasets loaded");
+  }
+  
+  DATASETS = mergeDatasets(PUBLIC_DATASETS, PRIVATE_DATASETS);
+  console.log("Available datasets:", Object.keys(DATASETS));
+  
+  // initial load – must happen after DATASETS is ready
+  loadDataset(select.value);
+})();
 
 // ────────────────────────────────────────────────
 // Visibility toggles
